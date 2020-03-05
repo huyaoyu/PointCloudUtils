@@ -1,0 +1,13 @@
+Build/
+build/
+Data/
+data/
+WD/
+cmake-build-debug/
+.idea/
+*.png
+*.jpg
+*.pp3
+*.bmp
+*.pyc
+
