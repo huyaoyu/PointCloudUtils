@@ -27,3 +27,7 @@ target_link_libraries(${EXE_DOWNSAMPLE} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYST
 set(EXE_MOVE_CENTER MoveCenter)
 add_executable(${EXE_MOVE_CENTER} MoveCenter.cpp)
 target_link_libraries(${EXE_MOVE_CENTER} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
+
+set(EXE_SMOOTH_FILTER SmoothFilter)
+add_executable(${EXE_SMOOTH_FILTER} SmoothFilter.cpp)
+target_link_libraries(${EXE_SMOOTH_FILTER} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
