@@ -3,7 +3,6 @@
 #include <string>
 #include <vector>
 
-#include <boost/algorithm/string.hpp>
 //#include <boost/assert.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
@@ -12,6 +11,8 @@
 #include <pcl/io/ply_io.h>
 #include <pcl/point_types.h>
 #include <pcl/filters/voxel_grid.h>
+
+#include "Args/Args.hpp"
 
 // Namespaces.
 namespace bpo = boost::program_options;
@@ -31,40 +32,6 @@ std::ostream& operator<<(std::ostream& os, const std::vector<T>& v)
 {
     copy(v.begin(), v.end(), std::ostream_iterator<T>(os, " "));
     return os;
-}
-
-template<typename T>
-std::vector<T> extract_number_from_string(const std::string& s, const int expected, const std::string& delimiter=",") {
-
-    if ( expected <= 0 ) {
-        std::stringstream ss;
-        ss << "Exprected number must be positive. expected = " << expected << ". ";
-        throw std::runtime_error(ss.str());
-    }
-
-    // Split the string.
-    std::vector<std::string> splitString;
-    boost::split(splitString, s, boost::is_any_of(delimiter));
-
-    if ( splitString.size() != expected ) {
-        std::stringstream ss;
-        ss << "Wrong number of split strings (" << splitString.size() << "). "
-           << "Expecting " << expected << ". ";
-        throw std::runtime_error(ss.str());
-    }
-
-    // Convert the strings into numbers.
-    T number;
-    std::stringstream ss;
-    std::vector<T> numbers;
-
-    for ( auto& fs : splitString ) {
-        ss.str(""); ss.clear(); ss << fs;
-        ss >> number;
-        numbers.push_back(number);
-    }
-
-    return numbers;
 }
 
 typedef struct Args {

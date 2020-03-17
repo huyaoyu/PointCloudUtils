@@ -20,14 +20,20 @@ message(STATUS "PCL_INCLUDE_DIRS=${PCL_INCLUDE_DIRS}")
 message(STATUS "PCL_LIBRARY_DIRS=${PCL_LIBRARY_DIRS}")
 add_definitions(${PCL_DEFINITIONS})
 
+include_directories(includes)
+
 set(EXE_DOWNSAMPLE DownSample)
-add_executable(${EXE_DOWNSAMPLE} DownSample.cpp)
+add_executable(${EXE_DOWNSAMPLE} src/DownSample.cpp)
 target_link_libraries(${EXE_DOWNSAMPLE} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
 set(EXE_MOVE_CENTER MoveCenter)
-add_executable(${EXE_MOVE_CENTER} MoveCenter.cpp)
+add_executable(${EXE_MOVE_CENTER} src/MoveCenter.cpp)
 target_link_libraries(${EXE_MOVE_CENTER} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
 set(EXE_SMOOTH_FILTER SmoothFilter)
-add_executable(${EXE_SMOOTH_FILTER} SmoothFilter.cpp)
+add_executable(${EXE_SMOOTH_FILTER} src/SmoothFilter.cpp)
 target_link_libraries(${EXE_SMOOTH_FILTER} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
+
+set(EXE_CROP_BBB CropByBBox)
+add_executable(${EXE_CROP_BBB} src/CropByBBox.cpp)
+target_link_libraries(${EXE_CROP_BBB} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
