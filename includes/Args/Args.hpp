@@ -11,6 +11,21 @@
 
 #include <boost/algorithm/string.hpp>
 
+template <typename T>
+void show_numeric_vector(const std::vector<T>& v, const std::string& delimiter=",") {
+    for ( T c : v ) {
+        std::cout << c << delimiter;
+    }
+}
+
+template <typename T>
+void show_vector_as_list(const std::vector<T>& v,
+        const std::string& delimiter="\n", const std::string& prefix="", const std::string& suffix="") {
+    for ( T c : v ) {
+        std::cout << prefix << c << suffix << delimiter;
+    }
+}
+
 template<typename T>
 std::vector<T> extract_number_from_string(const std::string& s, const int expected, const std::string& delimiter=",") {
 
@@ -43,6 +58,22 @@ std::vector<T> extract_number_from_string(const std::string& s, const int expect
     }
 
     return numbers;
+}
+
+bool validate_string_with_trimming(const std::string& s, const std::vector<std::string>& validList) {
+    // Make a copy of the trimmed s.
+    auto ts = boost::algorithm::trim_copy(s);
+
+    bool flagFound = false;
+
+    for ( std::string v : validList ) {
+        if ( ts == boost::algorithm::trim_copy(v) ) {
+            flagFound = true;
+            break;
+        }
+    }
+
+    return flagFound;
 }
 
 #endif //POINTCLOUDUTILS_ARGS_HPP

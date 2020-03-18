@@ -29,7 +29,7 @@ std::vector<std::string> read_file_list(const std::string& fn)
             boost::algorithm::trim(line);
 
             if ( !line.empty() ) {
-                fList.push_back(boost::algorithm::trim_copy(line));
+                fList.push_back(line);
             } else {
                 std::cout << "Empty line at Line " << count << std::endl;
             }
@@ -39,6 +39,8 @@ std::vector<std::string> read_file_list(const std::string& fn)
         ss << "File " << fn << " not opened.";
         throw(std::runtime_error(ss.str()));
     }
+
+    ifs.close();
 
     return fList;
 }

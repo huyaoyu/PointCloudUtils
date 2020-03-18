@@ -7,11 +7,9 @@
 #include <string>
 #include <vector>
 
-#include <boost/algorithm/string.hpp>
 //#include <boost/assert.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
 
 #include <Eigen/Dense>
 
@@ -19,6 +17,7 @@
 #include <pcl/point_types.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/crop_box.h>
+#include <pcl/filters/voxel_grid.h>
 
 #include "Args/Args.hpp"
 #include "Filesystem/Filesystem.hpp"
@@ -44,26 +43,69 @@ std::ostream& operator<<(std::ostream& os, const std::vector<T>& v)
     return os;
 }
 
-typedef struct Args {
-    std::string inFile;
-    std::string outFile;
-    std::vector<double> coners;
-    std::string inputPrefix;
-} Args_t;
+class Args
+{
+public:
+    Args();
+    ~Args() {}
 
-void parse_args(int argc, char* argv[], Args_t& args) {
-    std::string bBoxString;
+    bool validate(void) {
+        bool flag = true;
+
+        bool flagPCType = validate_string_with_trimming(pcType, pcTypeValidList);
+
+        if ( !flagPCType ) {
+            std::cout << "Validate pcType: " << pcType << std::endl;
+            std::cout << "Valid types are: " << std::endl;
+            show_vector_as_list(pcTypeValidList);
+        }
+
+        flag = flag && flagPCType;
+
+        return flag;
+    }
+public:
+    static const std::string PC_TYPE_XYZRGB;
+    static const std::string PC_TYPE_XYZRGBA;
+    static const std::string PC_TYPE_Normal;
+
+public:
+    std::string inFile; // A file contains a list of files.
+    std::string outFile; // The single output filename.
+    std::vector<double> corners; // The two corners of the bounding box. Order: x0, y0, z0, x1, y1, z1.
+    std::string pcType; // The type of the point cloud. Supported types are XYZRGB, XYZRGBA, Normal.
+    std::vector<std::string> pcTypeValidList;
+    std::string inputPrefix; // The prefix of the files listed in "inFile".
+    bool flagDownsample;
+    std::vector<float> leafSize; // The leaf size of the voxel down-sample filter. 3-element vector.
+};
+
+const std::string Args::PC_TYPE_XYZRGB  = "XYZRGB";
+const std::string Args::PC_TYPE_XYZRGBA = "XYZRGBA";
+const std::string Args::PC_TYPE_Normal  = "Normal";
+
+Args::Args()
+: pcType(PC_TYPE_XYZRGB), pcTypeValidList({PC_TYPE_XYZRGB, PC_TYPE_XYZRGBA, PC_TYPE_Normal}),
+  flagDownsample(false)
+{ }
+
+void parse_args(int argc, char* argv[], Args& args) {
+    std::string bBoxString; // Temporary string storing the command line arguments.
+    std::string leafSizeString; // Temporary string storing the leaf size.
 
     try
     {
         bpo::options_description optDesc("Remove outliers and smooth a point cloud.");
 
         optDesc.add_options()
-                ("help", "produce help message")
-                ("infile", bpo::value< std::string >(&(args.inFile))->required(), "input file")
-                ("outfile", bpo::value< std::string >(&(args.outFile))->required(), "input file")
+                ("help", "Produce help message.")
+                ("infile", bpo::value< std::string >(&(args.inFile))->required(), "Input file.")
+                ("outfile", bpo::value< std::string >(&(args.outFile))->required(), "Output file.")
+                ("pc-type", bpo::value< std::string >(&args.pcType)->default_value("XYZRGB"), "The Type of the point cloud. Currently support: XYZRGB, XYZRGBA, Normal.")
                 ("input-prefix", bpo::value< std::string >(&args.inputPrefix)->default_value("."), "The prefix of the input files listed in the input file.")
-                ("bbox", bpo::value< std::string >(&bBoxString), "x0, y0, z0, x1, y1, z1");
+                ("bbox", bpo::value< std::string >(&bBoxString), "x0, y0, z0, x1, y1, z1")
+                ("down-sample", bpo::value< int >()->implicit_value(1), "Set this flag to enable down-sample.")
+                ("leaf-size", bpo::value< std::string >(&leafSizeString)->default_value("0.1, 0.1, 0.1"), "leaf size");
 
         bpo::positional_options_description posOptDesc;
         posOptDesc.add("infile", 1).add("outfile", 1).add("bbox", 1);
@@ -72,6 +114,12 @@ void parse_args(int argc, char* argv[], Args_t& args) {
         bpo::store(bpo::command_line_parser(argc, argv).
                 options(optDesc).positional(posOptDesc).run(), optVM);
         bpo::notify(optVM);
+
+        if ( optVM.count("down-sample") ) {
+            args.flagDownsample = true;
+        } else {
+            args.flagDownsample = false;
+        }
     }
     catch(std::exception& e)
     {
@@ -79,17 +127,65 @@ void parse_args(int argc, char* argv[], Args_t& args) {
         throw(e);
     }
 
-    // Extract the leaf size;
-    args.coners = extract_number_from_string<double>(bBoxString, 6);
+    // Extract the coordinates for the corners.
+    args.corners = extract_number_from_string<double>(bBoxString, 6);
+
+    // Extract the numbers for the leaf size.
+    args.leafSize = extract_number_from_string<float>(leafSizeString, 3);
+
+    // Validate the point cloud type specification.
+    if ( !args.validate() ) {
+        std::stringstream ss;
+        ss << "args.validate() returns false. ";
+        throw(std::runtime_error(ss.str()));
+    }
+}
+
+template <typename T>
+static void read_downsample(const std::string& fn, const std::vector<float>& leafSize,
+        typename pcl::PointCloud<T>::Ptr& pOutCloud, const bool flagDownsample=false) {
+    // ========== Read the point cloud from the file. ==========
+    typename pcl::PointCloud<T>::Ptr pInput( new pcl::PointCloud<T> );
+
+    std::cout << "Loading points from " << fn << " ... " << std::endl;
+
+    QUICK_TIME_START(teReadPointCloud);
+    if ( pcl::io::loadPLYFile<T>(fn, *pInput) == -1 ) {
+        std::stringstream ss;
+        ss << "Failed to read: " << fn;
+        throw( std::runtime_error(ss.str()) );
+    }
+    QUICK_TIME_END(teReadPointCloud);
+
+    std::cout << pInput->size() << " points loaded in " << teReadPointCloud << "ms. " << std::endl;
+
+    if ( flagDownsample ) {
+        // ========== Down-sample by a voxel grid filter. ==========
+
+        QUICK_TIME_START(teFilter);
+        pcl::VoxelGrid<T> sor;
+        sor.setLeafSize(leafSize[0], leafSize[1], leafSize[2]);
+        sor.setInputCloud(pInput);
+        sor.filter(*pOutCloud);
+        QUICK_TIME_END(teFilter);
+
+        std::cout << "Down-sampled to " << pOutCloud->size() << " points. " << std::endl;
+        std::cout << "Voxel filter in " << teFilter << "ms. " << std::endl;
+    } else {
+        pOutCloud = pInput;
+    }
 }
 
 static std::vector<double> get_ordered_corner(const std::vector<double>& corner)
 {
     std::vector<double> ordered;
+
+    // First corner point.
     ordered.push_back(std::min( corner[0], corner[3] ));
     ordered.push_back(std::min( corner[1], corner[4] ));
     ordered.push_back(std::min( corner[2], corner[5] ));
 
+    // Second corner point.
     ordered.push_back(std::max( corner[0], corner[3] ));
     ordered.push_back(std::max( corner[1], corner[4] ));
     ordered.push_back(std::max( corner[2], corner[5] ));
@@ -98,7 +194,7 @@ static std::vector<double> get_ordered_corner(const std::vector<double>& corner)
 }
 
 template <typename T>
-static void crop( const typename pcl::PointCloud<T>::Ptr& inCloud,
+static void crop_by_PassThrough( const typename pcl::PointCloud<T>::Ptr& inCloud,
         typename pcl::PointCloud<T>::Ptr& outCloud,
         const std::vector<double>& corners )
 {
@@ -106,9 +202,7 @@ static void crop( const typename pcl::PointCloud<T>::Ptr& inCloud,
     auto ordered = get_ordered_corner(corners);
 
     std::cout << "ordered: " << std::endl;
-    for ( double c : ordered ) {
-        std::cout << c << ", ";
-    }
+    show_numeric_vector(ordered);
     std::cout << std::endl;
 
     // Temporary point cloud.
@@ -141,6 +235,8 @@ static void crop_by_CropBox( const typename pcl::PointCloud<T>::Ptr& inCloud,
                   typename pcl::PointCloud<T>::Ptr& outCloud,
                   const std::vector<double>& corners )
 {
+    QUICK_TIME_START(te);
+
     // Get the ordered corners.
     auto ordered = get_ordered_corner(corners);
 
@@ -149,57 +245,44 @@ static void crop_by_CropBox( const typename pcl::PointCloud<T>::Ptr& inCloud,
     pass.setMax( Eigen::Vector4f( ordered[3], ordered[4], ordered[5], 1.0 ) );
     pass.setInputCloud(inCloud);
     pass.filter(*outCloud);
+
+    QUICK_TIME_END(te);
+
+    std::cout << "Cropped " << outCloud->size() << " points. " << std::endl;
+    std::cout << "Crop in " << te << "ms. " << std::endl;
 }
 
-int main(int argc, char* argv[]) {
-    std::cout << "Hello, PCL!" << std::endl;
-
-    Args_t args;
-
-    parse_args(argc, argv, args);
-
-    std::cout << "The bounds of the BBox are: " << std::endl;
-    for (double c : args.coners) {
-        std::cout << c << ", ";
-    }
-    std::cout << std::endl << std::endl;
-
+template <typename T>
+static void typed_process(const Args& args) {
     // Read the input file list.
     auto fList = read_file_list(args.inFile);
 
-    std::cout << "The input file list is: " << std::endl;
+    typename pcl::PointCloud<T>::Ptr pOutput( new pcl::PointCloud<T> );
+
+    std::cout << "Start processing..." << std::endl << std::endl;
+
+    QUICK_TIME_START(teProcess);
+
     for ( std::string f : fList ) {
-        std::cout << args.inputPrefix << "/" << f << std::endl;
+        // Prepare the file name.
+        std::string fn = args.inputPrefix + "/" + f;
+        std::cout << fn << std::endl;
+
+        // Read and down sample the point cloud.
+        typename pcl::PointCloud<T>::Ptr pDownSampled( new pcl::PointCloud<T> );
+        read_downsample<T>( fn, args.leafSize, pDownSampled, args.flagDownsample );
+
+        // Crop the point cloud.
+        typename pcl::PointCloud<T>::Ptr pCropped( new pcl::PointCloud<T> );
+        crop_by_CropBox<T>(pDownSampled, pCropped, args.corners);
+
+        // Merge the point cloud.
+        *pOutput += *pCropped;
+
+        // Show loop info.
+        std::cout << "Total accumulated points: " << pOutput->size() << ". " << std::endl;
+        std::cout << std::endl;
     }
-    std::cout << std::endl;
-
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr pInput( new pcl::PointCloud<pcl::PointXYZRGB> );
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr pOutput( new pcl::PointCloud<pcl::PointXYZRGB> );
-
-    std::string fn = args.inputPrefix + "/" + fList[0];
-
-    std::cout << "Loading points from " << fn << " ... " << std::endl;
-
-    QUICK_TIME_START(teReadPointCloud);
-
-    if ( pcl::io::loadPLYFile<pcl::PointXYZRGB>(fn, *pInput) == -1 ) {
-        std::cerr << "Failed to read: " << fn << std::endl;
-        return -1;
-    }
-
-    QUICK_TIME_END(teReadPointCloud);
-
-    std::cout << "Load " << pInput->size() << " points from " << fn
-              << " in " << teReadPointCloud << " ms." << std::endl;
-
-    QUICK_TIME_START(teCrop);
-
-    crop_by_CropBox<pcl::PointXYZRGB>(pInput, pOutput, args.coners);
-
-    QUICK_TIME_END(teCrop);
-
-    std::cout << "Crop in " << teCrop << " ms. " << std::endl;
-    std::cout << "Point cloud contains " << pOutput->size() << " points." << std::endl;
 
     // Save the filtered point cloud.
     QUICK_TIME_START(teWrite);
@@ -208,7 +291,52 @@ int main(int argc, char* argv[]) {
     writer.write(args.outFile, *pOutput, true, false);
     QUICK_TIME_END(teWrite);
 
-    std::cout << "Write point cloud in " << teWrite << " ms." << std::endl;
+    std::cout << "Write point cloud in " << teWrite << " ms. " << std::endl;
+
+    QUICK_TIME_END(teProcess);
+
+    std::cout << "Total time: " << teProcess << "ms. " << std::endl;
+    std::cout << std::endl;
+}
+
+int main(int argc, char* argv[]) {
+    std::cout << "Hello, CropByBBox!" << std::endl;
+
+    // Handle the command line.
+    Args args;
+    parse_args(argc, argv, args);
+
+    // Show the corner specification of the bounding box.
+    std::cout << "The bounds of the BBox are: " << std::endl;
+    show_numeric_vector(args.corners);
+    std::cout << std::endl << std::endl;
+
+    // Show the leaf size specification.
+    std::cout << "The leaf sizes are: " << std::endl;
+    show_numeric_vector(args.leafSize);
+    std::cout << std::endl << std::endl;
+
+    // Read the input file list.
+    auto fList = read_file_list(args.inFile);
+
+    // Show the content of the file list.
+    std::cout << "The input file list is: " << std::endl;
+    show_vector_as_list(fList, "\n", args.inputPrefix + "/");
+    std::cout << std::endl;
+
+    // Process according to different types.
+    if ( args.pcType == Args::PC_TYPE_XYZRGB ) {
+        typed_process<pcl::PointXYZRGB>(args);
+    } else if ( args.pcType == Args::PC_TYPE_XYZRGBA ) {
+        typed_process<pcl::PointXYZRGBA>(args);
+    } else if ( args.pcType == Args::PC_TYPE_Normal ) {
+        typed_process<pcl::PointNormal>(args);
+    } else {
+        // Should never be here.
+        std::stringstream ss;
+        ss << "Unexpected args.pcType: " << args.pcType;
+        throw(std::runtime_error(ss.str()));
+    }
 
     return 0;
 }
