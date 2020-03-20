@@ -37,3 +37,7 @@ target_link_libraries(${EXE_SMOOTH_FILTER} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILES
 set(EXE_CROP_BBB CropByBBox)
 add_executable(${EXE_CROP_BBB} src/CropByBBox.cpp)
 target_link_libraries(${EXE_CROP_BBB} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
+
+set(EXE_TRY_DISJOINT_SET TryDisjoingSet)
+add_executable(${EXE_TRY_DISJOINT_SET} src/TryDisjointSet.cpp)
+#target_link_libraries(${EXE_TRY_DISJOINT_SET} )
