@@ -11,7 +11,39 @@
 #include <string>
 #include <vector>
 
+#include <boost/filesystem.hpp>
 #include <boost/algorithm/string.hpp>
+
+std::vector<std::string> get_file_parts(const std::string& path) {
+    boost::filesystem::path p(path);
+
+    std::vector<std::string> parts;
+
+    parts.push_back( p.parent_path().string() );
+    parts.push_back( p.stem().string() );
+    parts.push_back( p.extension().string() );
+
+    if ( 0 == parts[0].length() ) {
+        parts[0] = "./";
+    }
+
+    return parts;
+}
+
+void test_directory(const std::string& dir) {
+    boost::filesystem::path p(dir);
+
+    if ( !boost::filesystem::is_directory(p) ) {
+        // Create the directory.
+        try {
+            boost::filesystem::create_directories(p);
+        } catch ( boost::filesystem::filesystem_error& err ) {
+            std::stringstream ss;
+            ss << "Create directory " << dir << " failed. ";
+            throw(std::runtime_error(ss.str()));
+        }
+    }
+}
 
 std::vector<std::string> read_file_list(const std::string& fn)
 {

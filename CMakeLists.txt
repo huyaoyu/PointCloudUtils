@@ -38,6 +38,16 @@ set(EXE_CROP_BBB CropByBBox)
 add_executable(${EXE_CROP_BBB} src/CropByBBox.cpp)
 target_link_libraries(${EXE_CROP_BBB} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
-set(EXE_TRY_DISJOINT_SET TryDisjoingSet)
+set(EXE_NORMAL_ESTIMATION NormalEstimation)
+add_executable(${EXE_NORMAL_ESTIMATION} src/NormalEstimation.cpp)
+target_link_libraries(${EXE_NORMAL_ESTIMATION} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
+
+set(EXE_TRY_DISJOINT_SET TryDisjointSet)
 add_executable(${EXE_TRY_DISJOINT_SET} src/TryDisjointSet.cpp)
 #target_link_libraries(${EXE_TRY_DISJOINT_SET} )
+
+set(EXE_HOLE_BOUNDARY_DETECTION HoleBoundaryDetection)
+add_executable(${EXE_HOLE_BOUNDARY_DETECTION}
+        src/HoleBoundaryDetection/HoleBoundaryDetector.cpp includes/HoleBoundaryDetection/HoleBoundaryDetector.hpp
+        src/HoleBoundaryDetection/HoleBoundaryDetection.cpp)
+target_link_libraries(${EXE_HOLE_BOUNDARY_DETECTION} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
