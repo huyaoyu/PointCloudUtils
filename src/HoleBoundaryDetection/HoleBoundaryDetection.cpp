@@ -190,5 +190,21 @@ int main(int argc, char* argv[]) {
 //    const int index = 245930;
 //    test_show_proximity_graph_vertex_neighbors<P_t>(pInput, hbd, index);
 
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr colored ( new pcl::PointCloud<pcl::PointXYZRGB> );
+    hbd.create_rgb_representation(colored);
+
+    // Test the output directory.
+    test_directory(args.outDir);
+
+    // Save the point cloud.
+    QUICK_TIME_START(teWrite)
+    std::string outFn = args.outDir + "/Colored.ply";
+    pcl::PLYWriter writer;
+    std::cout << "Saving the filtered point cloud." << std::endl;
+    writer.write(outFn, *colored, true, false);
+    QUICK_TIME_END(teWrite)
+
+    std::cout << "Write point cloud in " << teWrite << " ms. " << std::endl;
+
     return 0;
 }

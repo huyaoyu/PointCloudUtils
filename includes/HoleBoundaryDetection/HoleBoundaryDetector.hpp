@@ -40,6 +40,8 @@ public:
 
     void process();
 
+    void create_rgb_representation(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& pOutput);
+
 protected:
     void build_proximity_graph();
     void compute_criteria();

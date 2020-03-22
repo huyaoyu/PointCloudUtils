@@ -31,4 +31,23 @@ void make_trans_mat_by_change_of_normalized_basis(
     mat.block(0,3,3,1) = -R.transpose() * T;
 }
 
+template < typename realT >
+void make_trans_mat_by_change_of_normalized_basis(
+        const Eigen::Vector3<realT>& b0,
+        const Eigen::Vector3<realT>& b1,
+        const Eigen::Vector3<realT>& b2,
+        const Eigen::Vector3<realT>& t,
+        Eigen::Matrix4<realT>& mat ) {
+
+    Eigen::Matrix3<realT> R;
+    R.block(0,0,3,1) = b0;
+    R.block(0,1,3,1) = b1;
+    R.block(0,2,3,1) = b2;
+
+    mat = Eigen::Matrix4<realT>::Identity();
+
+    mat.block(0,0,3,3) = R.transpose();
+    mat.block(0,3,3,1) = -R.transpose() * t;
+}
+
 #endif //POINTCLOUDUTILS_TRANSFORMHELPERS_HPP

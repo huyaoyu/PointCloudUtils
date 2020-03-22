@@ -52,3 +52,26 @@ void HBDetector::process(){
     // Compute the criteria.
     compute_criteria();
 }
+
+void HBDetector::create_rgb_representation(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& pOutput) {
+    QUICK_TIME_START(te)
+
+    assert(pInput.get() != nullptr);
+    assert( pInput->size() == criteria.rows() );
+
+    // Copy the input to the output.
+    pcl::copyPointCloud( *pInput, *pOutput );
+
+    // Loop over all the points to create the color.
+    for ( int i = 0; i < pInput->size(); ++i ) {
+        if ( criteria(i, 0) >= 0.3 ) {
+            pOutput->at(i).rgba = 0xFFFF0000; // Red.
+        } else {
+            pOutput->at(i).rgba = 0xFFFFFFFF; // Wight.
+        }
+    }
+
+    QUICK_TIME_END(te)
+
+    std::cout << "Create RGB representation in " << te << "ms. " << std::endl;
+}

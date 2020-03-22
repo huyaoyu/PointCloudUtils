@@ -31,5 +31,22 @@ int main(int argc, char* argv[]) {
 
     cout << "mat = " << endl << mat << endl;
 
+    // Use eigen vectors.
+
+    Eigen::Vector3<real> eb0, eb1, eb2;
+    eb0 << 0, -1, 0;
+    eb1 << 1, 0, 0;
+    eb2 << 0, 0, 1;
+
+    Eigen::Vector3<real> et;
+    et << 2, -2, 0;
+
+    Eigen::Matrix4<real> emat;
+
+    make_trans_mat_by_change_of_normalized_basis(
+            eb0, eb1, eb2, et, emat );
+
+    cout << "emat = " << endl << emat << endl;
+
     return 0;
 }

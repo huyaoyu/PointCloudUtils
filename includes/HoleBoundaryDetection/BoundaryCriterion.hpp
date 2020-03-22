@@ -5,21 +5,28 @@
 #ifndef POINTCLOUDUTILS_BOUNDARYCRITERION_HPP
 #define POINTCLOUDUTILS_BOUNDARYCRITERION_HPP
 
+#include <algorithm>    // std::sort
+#include <cmath>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
 
+#include <boost/math/constants/constants.hpp>
+
 #include <Eigen/Dense>
 
 #include <pcl/io/ply_io.h>
 #include <pcl/point_types.h>
+#include <pcl/common/transforms.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/project_inliers.h>
 #include <pcl/ModelCoefficients.h>
 
+#include "Geometry/TransformHelpers.hpp"
 #include "HoleBoundaryDetection/ProximityGraph.hpp"
 #include "Profiling/SimpleTime.hpp"
+#include "Visualization/ListPoints.hpp"
 
 namespace pcu
 {
@@ -153,10 +160,71 @@ static void project_2_plane(
     }
 }
 
+template < typename pT, typename realT >
+static void compute_angles_2D( const typename pcl::PointCloud<pT>::Ptr& points,
+        std::vector<realT>& angles ) {
+    angles.resize( points->size() );
+
+    for ( int i = 0; i < points->size(); ++i ) {
+        angles[i] = static_cast<realT>( std::atan2( points->at(i).y, points->at(i).x ) );
+    }
+}
+
+template < typename realT >
+static realT checked_angle(realT a, realT pi) {
+    return ( a > pi ) ? ( 2*pi - a ) : a ;
+}
+
+/**
+ * It is assumed that the values in soredAngles are sorted in ascending order.
+ * @tparam realT
+ * @param sortedAngles
+ * @return
+ */
+template < typename realT >
+static realT angle_criterion( const std::vector<realT>& sortedAngles ) {
+    const auto n = sortedAngles.size();
+    assert( n > 1 );
+
+    auto maxAngle = static_cast<realT>(0);
+    auto a = static_cast<realT>(0);
+
+    const auto pi = boost::math::constants::pi<realT>();
+
+    for ( int i = 1; i < n; ++i ) {
+        a = sortedAngles[i] - sortedAngles[i-1];
+
+//        a = checked_angle(a, pi);
+
+        if ( a > maxAngle ) {
+            maxAngle = a;
+        }
+    }
+
+//    a = checked_angle(sortedAngles[n-1] - sortedAngles[0], pi);
+    a = 2*pi - ( sortedAngles[n-1] - sortedAngles[0] );
+
+    if ( a > maxAngle ) {
+        maxAngle = a;
+    }
+
+//    // Test use.
+//    std::cout << "maxAngle = " << maxAngle << std::endl;
+
+    const auto f = static_cast<realT>( 2.0*pi / n );
+
+    return std::min( ( maxAngle - f ) / ( pi - f ), static_cast<realT>(1) );
+}
+
 template < typename pT >
 template < typename realT >
-realT BoundaryCriterion<pT>::compute_angle_criterion(const pT& point, const typename pcl::PointCloud<pT>::Ptr& neighborPoints) {
+realT BoundaryCriterion<pT>::compute_angle_criterion(
+        const pT& point, const typename pcl::PointCloud<pT>::Ptr& neighborPoints) {
     auto criterion = static_cast<realT>(0);
+
+//    // Test use: add the current point to the set of neighbor points.
+//    neighborPoints->push_back(point);
+
     // Project all the neighbor points to the local plane.
     typename pcl::PointCloud<pT>::Ptr projected ( new pcl::PointCloud<pT> );
     Eigen::Vector3<realT> fx;
@@ -168,14 +236,49 @@ realT BoundaryCriterion<pT>::compute_angle_criterion(const pT& point, const type
     Eigen::Vector3<realT> fy = fz.cross(fx);
 
     // Compute transform matrix.
+    Eigen::Vector3<realT> t;
+    t << point.x, point.y, point.z;
+    Eigen::Matrix4<realT> tm;
+    make_trans_mat_by_change_of_normalized_basis(
+            fx, fy, fz, t, tm );
 
     // Transform the projected neighbor points to the local frame.
+    typename pcl::PointCloud<pT>::Ptr transformed ( new pcl::PointCloud<pT> );
+    pcl::transformPointCloud( *projected, *transformed, tm );
+
+//    // Test use.
+//    pcu::list_points<pT>( neighborPoints, "neighborPoints: " );
+//    pcu::list_points<pT>( projected, "projected: " );
+//    pcu::list_points<pT>( transformed, "transformed: " );
+//    throw(std::runtime_error("Test use!"));
 
     // Compute all angles.
+    std::vector<realT> angles;
+    compute_angles_2D<pT, realT>( transformed, angles );
+
+//    // Test use.
+//    std::cout << "Angles before sorting." << std::endl;
+//    for ( const auto& a : angles ) {
+//        std::cout << a << ", ";
+//    }
+//    std::cout << std::endl;
 
     // Sort angle.
+    std::sort( angles.begin(), angles.end() );
+
+//    // Test use.
+//    std::cout << "Angles after sorting." << std::endl;
+//    for ( const auto& a : angles ) {
+//        std::cout << a << ", ";
+//    }
+//    std::cout << std::endl;
 
     // Angle criterion.
+    criterion = angle_criterion(angles);
+
+//    // Test use.
+//    std::cout << "criterion = " << criterion << std::endl;
+//    throw(std::runtime_error("Test!"));
 
     return criterion;
 }
