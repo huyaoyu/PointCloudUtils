@@ -3,6 +3,7 @@
 //
 
 #include <iostream>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -45,18 +46,24 @@ std::ostream& operator<<(std::ostream& os, const std::vector<T>& v)
 class Args
 {
 public:
-    Args() = default;
+    Args()
+    : pgK(AI_PROXIMITY_GRAPH_K), pgR(AI_PROXIMITY_GRAPH_R), pgSDB(AI_PROXIMITY_GRAPH_SDB)
+    {}
+
     ~Args() = default;
 
-    bool validate(void) {
+    bool validate() {
         bool flag = true;
 
         return flag;
     }
 
     friend std::ostream& operator<<(std::ostream& out, const Args& args) {
-        out << args.AS_IN_FILE << ": " << args.inFile << std::endl;
-        out << args.AS_OUT_DIR << ": " << args.outDir << std::endl;
+        out << Args::AS_IN_FILE << ": " << args.inFile << std::endl;
+        out << Args::AS_OUT_DIR << ": " << args.outDir << std::endl;
+        out << Args::AS_PROXIMITY_GRAPH_K << ": " << args.pgK << std::endl;
+        out << Args::AS_PROXIMITY_GRAPH_R << ": " << args.pgR << std::endl;
+        out << Args::AS_PROXIMITY_GRAPH_SDB << ": " << args.pgSDB << std::endl;
 
         return out;
     }
@@ -64,14 +71,31 @@ public:
 public:
     static const std::string AS_IN_FILE; // AS stands for argument string
     static const std::string AS_OUT_DIR;
+    static const std::string AS_PROXIMITY_GRAPH_K;
+    static const std::string AS_PROXIMITY_GRAPH_R;
+    static const std::string AS_PROXIMITY_GRAPH_SDB;
+
+    static const int AI_PROXIMITY_GRAPH_K; // AI stands for argument initial value.
+    static const double AI_PROXIMITY_GRAPH_R;
+    static const int AI_PROXIMITY_GRAPH_SDB;
 
 public:
     std::string inFile; // The input point cloud file.
     std::string outDir; // The output directory.
+    int    pgK;
+    double pgR;
+    int    pgSDB;
 };
 
 const std::string Args::AS_IN_FILE = "infile";
 const std::string Args::AS_OUT_DIR = "outdir";
+const std::string Args::AS_PROXIMITY_GRAPH_K   = "pg-k";
+const std::string Args::AS_PROXIMITY_GRAPH_R   = "pg-r";
+const std::string Args::AS_PROXIMITY_GRAPH_SDB = "pg-sdb";
+
+const int Args::AI_PROXIMITY_GRAPH_K    = 10;
+const double Args::AI_PROXIMITY_GRAPH_R = 0.02;
+const int Args::AI_PROXIMITY_GRAPH_SDB  = 100000;
 
 static void parse_args(int argc, char* argv[], Args& args) {
 
@@ -82,7 +106,10 @@ static void parse_args(int argc, char* argv[], Args& args) {
         optDesc.add_options()
                 ("help", "Produce help message.")
                 (Args::AS_IN_FILE.c_str(), bpo::value< std::string >(&(args.inFile))->required(), "Input file.")
-                (Args::AS_OUT_DIR.c_str(), bpo::value< std::string >(&(args.outDir))->required(), "Output directory.");
+                (Args::AS_OUT_DIR.c_str(), bpo::value< std::string >(&(args.outDir))->required(), "Output directory.")
+                (Args::AS_PROXIMITY_GRAPH_K.c_str(), bpo::value< int >(&args.pgK)->default_value(Args::AI_PROXIMITY_GRAPH_K), "The k value for the proximity graph.")
+                (Args::AS_PROXIMITY_GRAPH_R.c_str(), bpo::value< double >(&args.pgR)->default_value(Args::AI_PROXIMITY_GRAPH_R), "The radius for the proximity graph.")
+                (Args::AS_PROXIMITY_GRAPH_SDB.c_str(), bpo::value< int >(&args.pgSDB)->default_value(Args::AI_PROXIMITY_GRAPH_SDB), "The show-detail base for the proximity graph.");
 
         bpo::positional_options_description posOptDesc;
         posOptDesc.add(Args::AS_IN_FILE.c_str(), 1).add(Args::AS_OUT_DIR.c_str(), 1);
@@ -98,7 +125,6 @@ static void parse_args(int argc, char* argv[], Args& args) {
         throw(e);
     }
 }
-
 
 template <typename T>
 static void read_point_cloud(const std::string& fn, typename pcl::PointCloud<T>::Ptr& pOutCloud) {
@@ -116,6 +142,24 @@ static void read_point_cloud(const std::string& fn, typename pcl::PointCloud<T>:
     std::cout << pOutCloud->size() << " points loaded in " << teReadPointCloud << "ms. " << std::endl;
 }
 
+template <typename pT>
+static void test_show_proximity_graph_vertex_neighbors(
+        typename pcl::PointCloud<pT>::Ptr& pInput,
+        pcu::HBDetector& hbd, int index) {
+    std::set<int>& neighbor = hbd.get_proximity_graph().get_neighbors(index);
+    pT point = (*pInput)[index];
+    std::cout << "Vertex " << index << " ("
+              << point.x << ", "
+              << point.y << ", "
+              << point.z << ") " << std::endl;
+
+    std::cout << "The neighbors of vertex " << index << " are:" << std::endl;
+    for ( const auto& n : neighbor ) {
+        std::cout << n << ", ";
+    }
+    std::cout << std::endl;
+}
+
 int main(int argc, char* argv[]) {
     std::cout << "Hello, HoleBoundaryDetection!" << std::endl;
 
@@ -127,7 +171,7 @@ int main(int argc, char* argv[]) {
     std::cout << args << std::endl;
 
     // Define the point cloud object.
-    typedef pcl::PointXYZRGB P_t;
+    typedef pcl::PointNormal P_t;
     typedef pcl::PointCloud<P_t> PC_t;
     PC_t::Ptr pInput(new PC_t);
 
@@ -137,7 +181,14 @@ int main(int argc, char* argv[]) {
     // The hole boundary detector.
     auto hbd = pcu::HBDetector();
 
-//    hbd.set_point_cloud(pInput);
+    hbd.set_point_cloud(pInput);
+    hbd.set_proximity_graph_params(args.pgK, args.pgR, args.pgSDB);
+
+    hbd.process();
+
+//    // Test use.
+//    const int index = 245930;
+//    test_show_proximity_graph_vertex_neighbors<P_t>(pInput, hbd, index);
 
     return 0;
 }

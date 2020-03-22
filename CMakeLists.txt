@@ -48,6 +48,12 @@ add_executable(${EXE_TRY_DISJOINT_SET} src/TryDisjointSet.cpp)
 
 set(EXE_HOLE_BOUNDARY_DETECTION HoleBoundaryDetection)
 add_executable(${EXE_HOLE_BOUNDARY_DETECTION}
+        includes/HoleBoundaryDetection/BoundaryCriterion.hpp
+        src/HoleBoundaryDetection/ProximityGraph.cpp includes/HoleBoundaryDetection/ProximityGraph.hpp
         src/HoleBoundaryDetection/HoleBoundaryDetector.cpp includes/HoleBoundaryDetection/HoleBoundaryDetector.hpp
         src/HoleBoundaryDetection/HoleBoundaryDetection.cpp)
 target_link_libraries(${EXE_HOLE_BOUNDARY_DETECTION} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
+
+set(EXE_TRY_TRANSFORM_HELPERS TryTransformHelpers)
+add_executable(${EXE_TRY_TRANSFORM_HELPERS} includes/Geometry/TransformHelpers.hpp src/TryTransformHelpers.cpp)
+target_link_libraries(${EXE_TRY_TRANSFORM_HELPERS} Eigen3::Eigen)
