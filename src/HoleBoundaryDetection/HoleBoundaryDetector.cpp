@@ -63,8 +63,16 @@ void HBDetector::create_rgb_representation(pcl::PointCloud<pcl::PointXYZRGB>::Pt
     pcl::copyPointCloud( *pInput, *pOutput );
 
     // Loop over all the points to create the color.
+//    for ( int i = 0; i < pInput->size(); ++i ) {
+//        if ( criteria(i, 0) >= 0.3 ) {
+//            pOutput->at(i).rgba = 0xFFFF0000; // Red.
+//        } else {
+//            pOutput->at(i).rgba = 0xFFFFFFFF; // Wight.
+//        }
+//    }
+
     for ( int i = 0; i < pInput->size(); ++i ) {
-        if ( criteria(i, 0) >= 0.3 ) {
+        if ( criteria(i, 1) >= 0.75 ) {
             pOutput->at(i).rgba = 0xFFFF0000; // Red.
         } else {
             pOutput->at(i).rgba = 0xFFFFFFFF; // Wight.

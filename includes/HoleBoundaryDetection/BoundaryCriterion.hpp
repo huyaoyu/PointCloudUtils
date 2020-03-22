@@ -34,8 +34,13 @@ namespace pcu
 template < typename pT >
 class BoundaryCriterion {
 public:
-    BoundaryCriterion() = default;
+    BoundaryCriterion(): halfDiscSigmaFactor(1.0) {}
     ~BoundaryCriterion() = default;
+
+    void set_half_disc_sigma_factor(float f) {
+        assert( f > 0 );
+        halfDiscSigmaFactor = f;
+    }
 
     void set_point_cloud( typename pcl::PointCloud<pT>::Ptr& ppc) {
         pInputCloud = ppc;
@@ -56,11 +61,15 @@ protected:
             typename pcl::PointCloud<pT>::Ptr& neighborPoints);
 
     template < typename realT >
-    realT compute_angle_criterion(const pT& point, const typename pcl::PointCloud<pT>::Ptr& neighborPoints);
+    void compute_angle_and_half_disc_criteria( const pT& point,
+            const typename pcl::PointCloud<pT>::Ptr& neighborPoints,
+            realT& ac, realT& hc );
 
 protected:
     typename pcl::PointCloud<pT>::Ptr pInputCloud;
     ProximityGraph<pT>* pProximityGraph;
+
+    float halfDiscSigmaFactor;
 };
 
 template < typename pT >
@@ -161,13 +170,30 @@ static void project_2_plane(
 }
 
 template < typename pT, typename realT >
-static void compute_angles_2D( const typename pcl::PointCloud<pT>::Ptr& points,
-        std::vector<realT>& angles ) {
+static void compute_angles_and_distances_2D(
+        const typename pcl::PointCloud<pT>::Ptr& points,
+        std::vector<realT>& angles,
+        std::vector<realT>& distances,
+        realT& avgDistance ) {
     angles.resize( points->size() );
+    distances.resize( points->size() );
+
+    auto x = static_cast<realT>(0);
+    auto y = static_cast<realT>(0);
+    auto accDist = static_cast<realT>(0);
+    auto dist = static_cast<realT>(0);
 
     for ( int i = 0; i < points->size(); ++i ) {
-        angles[i] = static_cast<realT>( std::atan2( points->at(i).y, points->at(i).x ) );
+        x = points->at(i).x;
+        y = points->at(i).y;
+
+        angles[i] = static_cast<realT>( std::atan2( y, x ) );
+        dist = std::sqrt( x*x + y*y );
+        accDist += dist;
+        distances[i] = dist;
     }
+
+    avgDistance = static_cast<realT>( 1.0 * accDist / points->size() );
 }
 
 template < typename realT >
@@ -216,10 +242,54 @@ static realT angle_criterion( const std::vector<realT>& sortedAngles ) {
     return std::min( ( maxAngle - f ) / ( pi - f ), static_cast<realT>(1) );
 }
 
+template < typename pT, typename realT >
+static realT half_disc_criterion(
+        const typename pcl::PointCloud<pT>::Ptr& points,
+        const std::vector<realT>& distances,
+        realT avgDistance,
+        realT sigmaFactor=1.0) {
+    const auto n = points->size();
+
+    assert( n > 0 );
+    assert( distances.size() == n );
+
+    const auto sigma  = sigmaFactor * avgDistance;
+    const auto sigma2 = sigma * sigma;
+
+    auto g    = static_cast<realT>(0);
+    auto accX = static_cast<realT>(0);
+    auto accY = static_cast<realT>(0);
+    auto accZ = static_cast<realT>(0);
+    auto accW = static_cast<realT>(0);
+    auto d    = static_cast<realT>(0);
+
+    for ( int i = 0; i < n; ++i ) {
+        d = distances[i];
+
+        g = static_cast<realT>( std::exp( -d*d / sigma2 ) );
+
+        accX += g * points->at(i).x;
+        accY += g * points->at(i).y;
+        accZ += g * points->at(i).z;
+        accW += g;
+    }
+
+    accX /= accW;
+    accY /= accW;
+    accZ /= accW;
+
+    const auto pi = boost::math::constants::pi<realT>();
+
+    return std::min(
+            static_cast<realT>( std::sqrt( accX * accX + accY * accY + accZ * accZ ) / ( 4.0/3/pi * avgDistance ) ),
+            static_cast<realT>(1) );
+}
+
 template < typename pT >
 template < typename realT >
-realT BoundaryCriterion<pT>::compute_angle_criterion(
-        const pT& point, const typename pcl::PointCloud<pT>::Ptr& neighborPoints) {
+void BoundaryCriterion<pT>::compute_angle_and_half_disc_criteria(
+        const pT& point, const typename pcl::PointCloud<pT>::Ptr& neighborPoints,
+        realT& ac, realT& hc ) {
     auto criterion = static_cast<realT>(0);
 
 //    // Test use: add the current point to the set of neighbor points.
@@ -254,7 +324,9 @@ realT BoundaryCriterion<pT>::compute_angle_criterion(
 
     // Compute all angles.
     std::vector<realT> angles;
-    compute_angles_2D<pT, realT>( transformed, angles );
+    std::vector<realT> distances;
+    realT avgDistance;
+    compute_angles_and_distances_2D<pT, realT>(transformed, angles, distances, avgDistance);
 
 //    // Test use.
 //    std::cout << "Angles before sorting." << std::endl;
@@ -274,13 +346,17 @@ realT BoundaryCriterion<pT>::compute_angle_criterion(
 //    std::cout << std::endl;
 
     // Angle criterion.
-    criterion = angle_criterion(angles);
+    ac = angle_criterion(angles);
 
 //    // Test use.
 //    std::cout << "criterion = " << criterion << std::endl;
 //    throw(std::runtime_error("Test!"));
 
-    return criterion;
+    // Half-disc criterion.
+    hc = half_disc_criterion<pT, realT>( transformed, distances, avgDistance, halfDiscSigmaFactor );
+
+//    // Test use.
+//    throw(std::runtime_error("Test!"));
 }
 
 template < typename pT >
@@ -309,8 +385,9 @@ void BoundaryCriterion<pT>::compute(Eigen::MatrixX<realT>& criteria) {
         neighborPoints->clear();
         get_neighbor_points(i, neighbors, neighborPoints);
 
-        // Compute the angle criterion.
-        ac = compute_angle_criterion<realT>( (*pInputCloud)[i], neighborPoints );
+        // Compute the angle and half-disc criteria.
+        compute_angle_and_half_disc_criteria<realT>( (*pInputCloud)[i], neighborPoints,
+                ac, hc );
 
         // Compute the half-disk criterion.
 
