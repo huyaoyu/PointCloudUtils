@@ -18,6 +18,8 @@
 
 #include <pcl/io/ply_io.h>
 #include <pcl/point_types.h>
+#include <pcl/common/centroid.h> // Covariance matrix.
+#include <pcl/common/eigen.h> // Eigen values.
 #include <pcl/common/transforms.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/project_inliers.h>
@@ -31,15 +33,46 @@
 namespace pcu
 {
 
-template < typename pT >
+template < typename pT, typename realT >
 class BoundaryCriterion {
 public:
-    BoundaryCriterion(): halfDiscSigmaFactor(1.0) {}
+    BoundaryCriterion(): halfDiscSigmaFactor(1.0), shapeSigmaFactor(1.0) {
+        const auto oneSecond = static_cast<realT>(1.0/2);
+        const auto oneThird  = static_cast<realT>(1.0/3);
+        const auto oneFourth = static_cast<realT>(1.0/4);
+
+        barycentricPointInterior << 1, 0, 0;
+        barycentricPointLine     << 0, 1, 0;
+        barycentricPointCorner   << 0, 0, 1;
+        barycentricPointCenter   << oneThird, oneThird, oneThird;
+
+        barycentricTransformMat << oneSecond, oneSecond, oneThird,
+                                   oneSecond, oneFourth, oneThird,
+                                           0, oneFourth, oneThird;
+
+        barycentricTransformMat = barycentricTransformMat.inverse().eval();
+
+        EIGEN_ALIGN16 Eigen::Vector3<realT> valueBoundary;
+        valueBoundary << 2*oneThird, oneThird, 0;
+
+        barycentricPointBoundary = barycentricTransformMat * valueBoundary;
+
+        shapeSigma = shapeSigmaFactor * ( barycentricPointInterior - barycentricPointBoundary ).norm();
+        shapeSigma2 = shapeSigma * shapeSigma;
+    }
+
     ~BoundaryCriterion() = default;
 
-    void set_half_disc_sigma_factor(float f) {
+    void set_half_disc_sigma_factor(realT f) {
         assert( f > 0 );
         halfDiscSigmaFactor = f;
+    }
+
+    void set_shape_sigma_factor(realT f) {
+        assert( f > 0 );
+        shapeSigmaFactor = f;
+        shapeSigma  = shapeSigmaFactor * ( barycentricPointLine - barycentricPointBoundary ).norm();
+        shapeSigma2 = shapeSigma * shapeSigma;
     }
 
     void set_point_cloud( typename pcl::PointCloud<pT>::Ptr& ppc) {
@@ -52,28 +85,40 @@ public:
         pProximityGraph = ppg;
     }
 
-    template < typename realT >
-    void compute( Eigen::MatrixX<realT>& criteria );
+    void compute( Eigen::MatrixX<realT>& criteria, int startIdx=0 );
 
 protected:
     void get_neighbor_points(int idx,
             const typename ProximityGraph<pT>::Neighbors_t& neighbors,
             typename pcl::PointCloud<pT>::Ptr& neighborPoints);
 
-    template < typename realT >
-    void compute_angle_and_half_disc_criteria( const pT& point,
-            const typename pcl::PointCloud<pT>::Ptr& neighborPoints,
-            realT& ac, realT& hc );
+    realT shape_criterion( const typename pcl::PointCloud<pT>::Ptr& points );
+
+    void compute_criteria(const pT& point,
+                          const typename pcl::PointCloud<pT>::Ptr& neighborPoints,
+                          realT& ac, realT& hc, realT& sc );
 
 protected:
     typename pcl::PointCloud<pT>::Ptr pInputCloud;
     ProximityGraph<pT>* pProximityGraph;
 
-    float halfDiscSigmaFactor;
+    realT halfDiscSigmaFactor;
+
+    EIGEN_ALIGN16 Eigen::Vector3<realT> barycentricPointLine;
+    EIGEN_ALIGN16 Eigen::Vector3<realT> barycentricPointInterior;
+    EIGEN_ALIGN16 Eigen::Vector3<realT> barycentricPointCorner;
+    EIGEN_ALIGN16 Eigen::Vector3<realT> barycentricPointBoundary;
+    EIGEN_ALIGN16 Eigen::Vector3<realT> barycentricPointCenter;
+
+    EIGEN_ALIGN16 Eigen::Matrix3<realT> barycentricTransformMat; // The matrix apply to a value vector to get the Barycentric coordinate vector.
+
+    realT shapeSigmaFactor;
+    realT shapeSigma;
+    realT shapeSigma2;
 };
 
-template < typename pT >
-void BoundaryCriterion<pT>::get_neighbor_points(int idx,
+template < typename pT, typename realT >
+void BoundaryCriterion<pT, realT>::get_neighbor_points(int idx,
         const typename ProximityGraph<pT>::Neighbors_t& neighbors, typename pcl::PointCloud<pT>::Ptr& neighborPoints){
     // Copy the neighbor index into a pcl::PointIndices object.
     pcl::PointIndices::Ptr neighborsIdx ( new pcl::PointIndices() );
@@ -285,11 +330,55 @@ static realT half_disc_criterion(
             static_cast<realT>(1) );
 }
 
-template < typename pT >
-template < typename realT >
-void BoundaryCriterion<pT>::compute_angle_and_half_disc_criteria(
+template < typename pT, typename realT >
+static void compute_lambda( const typename pcl::PointCloud<pT>::Ptr& points,
+        Eigen::Vector3<realT>& vLambda ) {
+    // Compute the covariance matrix.
+    EIGEN_ALIGN16 Eigen::Matrix3<realT> covMat = Eigen::Matrix3<realT>::Zero();
+
+    if ( 0 == pcl::computeCovarianceMatrix( *points, covMat ) ) {
+        std::stringstream ss;
+        ss << "Compute covariance matrix failed.";
+        throw( std::runtime_error(ss.str()) );
+    }
+
+    // Compute the eigen values.
+    EIGEN_ALIGN16 Eigen::Vector3<realT> eigenValues;
+    pcl::eigen33( covMat, eigenValues ); // Results will be in increasing order.
+
+    vLambda << eigenValues(2), eigenValues(1), eigenValues(0);
+    vLambda /= eigenValues.sum();
+}
+
+template < typename pT, typename realT >
+realT BoundaryCriterion<pT, realT>::shape_criterion(const typename pcl::PointCloud<pT>::Ptr& points) {
+    // Compute the lambda vector.
+    EIGEN_ALIGN16 Eigen::Vector3<realT> vLambda = Eigen::Vector3<realT>::Zero();
+    compute_lambda<pT, realT>( points, vLambda );
+
+    // Compute the Barycentric coordinate.
+    EIGEN_ALIGN16 Eigen::Vector3<realT> coor = barycentricTransformMat * vLambda;
+
+//    // Test use.
+//    std::cout << "barycentricPointInterior = " << std::endl << barycentricPointInterior << std::endl;
+//    std::cout << "barycentricPointLine = "     << std::endl << barycentricPointLine << std::endl;
+//    std::cout << "barycentricPointCorner = "   << std::endl << barycentricPointCorner << std::endl;
+//    std::cout << "barycentricPointBoundary = " << std::endl << barycentricPointBoundary << std::endl;
+//    std::cout << "barycentricTransformMat = "  << std::endl << barycentricTransformMat << std::endl;
+//    std::cout << "shapeSigma = " << shapeSigma << std::endl;
+//    std::cout << "vLambda = " << std::endl << vLambda << std::endl;
+//    std::cout << "coor = "    << std::endl << coor << std::endl;
+
+    // Distance between the current coordinate and the point of "boundary type".
+    const realT dist = ( barycentricPointBoundary - coor ).norm();
+
+    return std::exp( -dist*dist / shapeSigma2 );
+}
+
+template < typename pT, typename realT >
+void BoundaryCriterion<pT, realT>::compute_criteria(
         const pT& point, const typename pcl::PointCloud<pT>::Ptr& neighborPoints,
-        realT& ac, realT& hc ) {
+        realT& ac, realT& hc, realT& sc ) {
     auto criterion = static_cast<realT>(0);
 
 //    // Test use: add the current point to the set of neighbor points.
@@ -314,7 +403,9 @@ void BoundaryCriterion<pT>::compute_angle_and_half_disc_criteria(
 
     // Transform the projected neighbor points to the local frame.
     typename pcl::PointCloud<pT>::Ptr transformed ( new pcl::PointCloud<pT> );
+    typename pcl::PointCloud<pT>::Ptr transformedNeighbors ( new pcl::PointCloud<pT> );
     pcl::transformPointCloud( *projected, *transformed, tm );
+    pcl::transformPointCloud( *neighborPoints, *transformedNeighbors, tm );
 
 //    // Test use.
 //    pcu::list_points<pT>( neighborPoints, "neighborPoints: " );
@@ -357,13 +448,20 @@ void BoundaryCriterion<pT>::compute_angle_and_half_disc_criteria(
 
 //    // Test use.
 //    throw(std::runtime_error("Test!"));
+
+    // Shape criterion. This is a protected member-function.
+    sc = shape_criterion( transformedNeighbors );
+
+//    // Test use.
+//    std::cout << "point = " << point << std::endl;
+//    pcu::list_points<pT>( transformedNeighbors, "transformedNeighbors: " );
 }
 
-template < typename pT >
-template < typename realT >
-void BoundaryCriterion<pT>::compute(Eigen::MatrixX<realT>& criteria) {
+template < typename pT, typename realT >
+void BoundaryCriterion<pT, realT>::compute( Eigen::MatrixX<realT>& criteria, int startIdx ) {
     assert(pInputCloud.get() != nullptr);
     assert(pProximityGraph != nullptr);
+    assert( startIdx >=0 && startIdx < pInputCloud->size() );
 
     QUICK_TIME_START(te)
     // Initialize the criteria.
@@ -376,7 +474,7 @@ void BoundaryCriterion<pT>::compute(Eigen::MatrixX<realT>& criteria) {
     auto sc = static_cast<realT>(0); // Shape criterion.
 
     // Loop over all the points in the point cloud.
-    for ( int i = 0; i < pInputCloud->size(); ++i ) {
+    for ( int i = startIdx; i < pInputCloud->size(); ++i ) {
         // Get the neighbors.
         typename ProximityGraph<pT>::Neighbors_t& neighbors =
                 pProximityGraph->get_neighbors(i);
@@ -385,13 +483,9 @@ void BoundaryCriterion<pT>::compute(Eigen::MatrixX<realT>& criteria) {
         neighborPoints->clear();
         get_neighbor_points(i, neighbors, neighborPoints);
 
-        // Compute the angle and half-disc criteria.
-        compute_angle_and_half_disc_criteria<realT>( (*pInputCloud)[i], neighborPoints,
-                ac, hc );
-
-        // Compute the half-disk criterion.
-
-        // Compute the shape criterion.
+        // Compute all the criteria.
+        compute_criteria((*pInputCloud)[i], neighborPoints,
+                                ac, hc, sc);
 
         // Update the criteria.
         criteria(i, 0) = ac;

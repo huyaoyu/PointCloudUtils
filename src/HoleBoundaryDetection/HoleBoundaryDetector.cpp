@@ -7,7 +7,8 @@
 using namespace pcu;
 
 HBDetector::HBDetector()
-: pgK(10), pgR(0.02), pgSDB(100000)
+: pgK(10), pgR(0.02), pgSDB(100000),
+  criteriaComputationStartIdx(0)
 {
 
 }
@@ -37,12 +38,17 @@ void HBDetector::build_proximity_graph() {
     proximityGraph.process(pgK, pgR, pgSDB);
 }
 
+void HBDetector::set_criteria_computation_start_index(int idx) {
+    assert( idx >= 0 );
+    criteriaComputationStartIdx = idx;
+}
+
 void HBDetector::compute_criteria() {
-    BoundaryCriterion<P_t> bc;
+    BoundaryCriterion<P_t, float> bc;
     bc.set_point_cloud(pInput);
     bc.set_proximity_graph(&proximityGraph);
 
-    bc.compute<float>(criteria);
+    bc.compute(criteria, criteriaComputationStartIdx);
 }
 
 void HBDetector::process(){
@@ -71,8 +77,31 @@ void HBDetector::create_rgb_representation(pcl::PointCloud<pcl::PointXYZRGB>::Pt
 //        }
 //    }
 
+//    for ( int i = 0; i < pInput->size(); ++i ) {
+//        if ( criteria(i, 1) >= 0.75 ) {
+//            pOutput->at(i).rgba = 0xFFFF0000; // Red.
+//        } else {
+//            pOutput->at(i).rgba = 0xFFFFFFFF; // Wight.
+//        }
+//    }
+
+//    for ( int i = 0; i < pInput->size(); ++i ) {
+//        if ( criteria(i, 2) >= 0.6 ) {
+//            pOutput->at(i).rgba = 0xFFFF0000; // Red.
+//        } else {
+//            pOutput->at(i).rgba = 0xFFFFFFFF; // Wight.
+//        }
+//    }
+
+    float criterion = 0.f;
+
     for ( int i = 0; i < pInput->size(); ++i ) {
-        if ( criteria(i, 1) >= 0.75 ) {
+
+        criterion = 0.4 * criteria(i, 0)
+                  + 0.4 * criteria(i, 1)
+                  + 0.2 * criteria(i, 2);
+
+        if ( criterion >= 0.5 ) {
             pOutput->at(i).rgba = 0xFFFF0000; // Red.
         } else {
             pOutput->at(i).rgba = 0xFFFFFFFF; // Wight.

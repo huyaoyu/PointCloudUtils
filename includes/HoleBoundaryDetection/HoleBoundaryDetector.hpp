@@ -33,10 +33,9 @@ public:
     ~HBDetector();
 
     void set_point_cloud(PC_t::Ptr& p);
-
     void set_proximity_graph_params(int k, double radius, int showDetailBase=100000);
-
     ProximityGraph<P_t>& get_proximity_graph();
+    void set_criteria_computation_start_index(int idx);
 
     void process();
 
@@ -58,6 +57,7 @@ protected:
     double pgR;
     int    pgSDB; // Show detail base.
 
+    int criteriaComputationStartIdx;
     Eigen::MatrixXf criteria;
 };
 

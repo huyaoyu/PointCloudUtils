@@ -47,7 +47,8 @@ class Args
 {
 public:
     Args()
-    : pgK(AI_PROXIMITY_GRAPH_K), pgR(AI_PROXIMITY_GRAPH_R), pgSDB(AI_PROXIMITY_GRAPH_SDB)
+    : pgK(AI_PROXIMITY_GRAPH_K), pgR(AI_PROXIMITY_GRAPH_R), pgSDB(AI_PROXIMITY_GRAPH_SDB),
+      cStartIdx(AI_C_START_IDX)
     {}
 
     ~Args() = default;
@@ -64,6 +65,7 @@ public:
         out << Args::AS_PROXIMITY_GRAPH_K << ": " << args.pgK << std::endl;
         out << Args::AS_PROXIMITY_GRAPH_R << ": " << args.pgR << std::endl;
         out << Args::AS_PROXIMITY_GRAPH_SDB << ": " << args.pgSDB << std::endl;
+        out << Args::AS_C_START_IDX << ": " << args.cStartIdx << std::endl;
 
         return out;
     }
@@ -74,10 +76,12 @@ public:
     static const std::string AS_PROXIMITY_GRAPH_K;
     static const std::string AS_PROXIMITY_GRAPH_R;
     static const std::string AS_PROXIMITY_GRAPH_SDB;
+    static const std::string AS_C_START_IDX;
 
     static const int AI_PROXIMITY_GRAPH_K; // AI stands for argument initial value.
     static const double AI_PROXIMITY_GRAPH_R;
     static const int AI_PROXIMITY_GRAPH_SDB;
+    static const int AI_C_START_IDX;
 
 public:
     std::string inFile; // The input point cloud file.
@@ -85,6 +89,7 @@ public:
     int    pgK;
     double pgR;
     int    pgSDB;
+    int    cStartIdx; // Criteria computation starting index.
 };
 
 const std::string Args::AS_IN_FILE = "infile";
@@ -92,10 +97,12 @@ const std::string Args::AS_OUT_DIR = "outdir";
 const std::string Args::AS_PROXIMITY_GRAPH_K   = "pg-k";
 const std::string Args::AS_PROXIMITY_GRAPH_R   = "pg-r";
 const std::string Args::AS_PROXIMITY_GRAPH_SDB = "pg-sdb";
+const std::string Args::AS_C_START_IDX = "c-start-index";
 
-const int Args::AI_PROXIMITY_GRAPH_K    = 10;
-const double Args::AI_PROXIMITY_GRAPH_R = 0.02;
-const int Args::AI_PROXIMITY_GRAPH_SDB  = 100000;
+const int    Args::AI_PROXIMITY_GRAPH_K   = 10;
+const double Args::AI_PROXIMITY_GRAPH_R   = 0.02;
+const int    Args::AI_PROXIMITY_GRAPH_SDB = 100000;
+const int    Args::AI_C_START_IDX         = 0;
 
 static void parse_args(int argc, char* argv[], Args& args) {
 
@@ -109,7 +116,8 @@ static void parse_args(int argc, char* argv[], Args& args) {
                 (Args::AS_OUT_DIR.c_str(), bpo::value< std::string >(&(args.outDir))->required(), "Output directory.")
                 (Args::AS_PROXIMITY_GRAPH_K.c_str(), bpo::value< int >(&args.pgK)->default_value(Args::AI_PROXIMITY_GRAPH_K), "The k value for the proximity graph.")
                 (Args::AS_PROXIMITY_GRAPH_R.c_str(), bpo::value< double >(&args.pgR)->default_value(Args::AI_PROXIMITY_GRAPH_R), "The radius for the proximity graph.")
-                (Args::AS_PROXIMITY_GRAPH_SDB.c_str(), bpo::value< int >(&args.pgSDB)->default_value(Args::AI_PROXIMITY_GRAPH_SDB), "The show-detail base for the proximity graph.");
+                (Args::AS_PROXIMITY_GRAPH_SDB.c_str(), bpo::value< int >(&args.pgSDB)->default_value(Args::AI_PROXIMITY_GRAPH_SDB), "The show-detail base for the proximity graph.")
+                (Args::AS_C_START_IDX.c_str(), bpo::value< int >(&args.cStartIdx)->default_value(Args::AI_C_START_IDX), "The starting index of the computation of the boundary criteria.");
 
         bpo::positional_options_description posOptDesc;
         posOptDesc.add(Args::AS_IN_FILE.c_str(), 1).add(Args::AS_OUT_DIR.c_str(), 1);
@@ -183,6 +191,7 @@ int main(int argc, char* argv[]) {
 
     hbd.set_point_cloud(pInput);
     hbd.set_proximity_graph_params(args.pgK, args.pgR, args.pgSDB);
+    hbd.set_criteria_computation_start_index(args.cStartIdx);
 
     hbd.process();
 

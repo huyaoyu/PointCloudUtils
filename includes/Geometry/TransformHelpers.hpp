@@ -13,6 +13,8 @@ template <typename realT>
 void make_trans_mat_by_change_of_normalized_basis(
         const realT* b0, const realT* b1, const realT* b2,
         const realT* t, Eigen::Matrix4<realT>& mat ) {
+    // http://www.michaelkeutel.de/blog/rotation-matrices-vector-basis/
+
     assert( b0 != nullptr );
     assert( b1 != nullptr );
     assert( b2 != nullptr );
