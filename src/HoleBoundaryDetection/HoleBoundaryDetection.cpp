@@ -191,7 +191,7 @@ int main(int argc, char* argv[]) {
 
     hbd.set_point_cloud(pInput);
     hbd.set_proximity_graph_params(args.pgK, args.pgR, args.pgSDB);
-    hbd.set_criteria_computation_start_index(args.cStartIdx);
+    hbd.set_criterion_computation_start_index(args.cStartIdx);
 
     hbd.process();
 
@@ -199,21 +199,40 @@ int main(int argc, char* argv[]) {
 //    const int index = 245930;
 //    test_show_proximity_graph_vertex_neighbors<P_t>(pInput, hbd, index);
 
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr colored ( new pcl::PointCloud<pcl::PointXYZRGB> );
-    hbd.create_rgb_representation(colored);
-
     // Test the output directory.
     test_directory(args.outDir);
 
-    // Save the point cloud.
-    QUICK_TIME_START(teWrite)
-    std::string outFn = args.outDir + "/Colored.ply";
-    pcl::PLYWriter writer;
-    std::cout << "Saving the filtered point cloud." << std::endl;
-    writer.write(outFn, *colored, true, false);
-    QUICK_TIME_END(teWrite)
+    {
+        // Colored point cloud by criteria.
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr coloredByCriteria ( new pcl::PointCloud<pcl::PointXYZRGB> );
+        hbd.create_rgb_representation_by_criteria(coloredByCriteria);
 
-    std::cout << "Write point cloud in " << teWrite << " ms. " << std::endl;
+        // Save the point cloud.
+        QUICK_TIME_START(teWrite_ColorByCriteria)
+        std::string outFn = args.outDir + "/ColoredByCriteria.ply";
+        pcl::PLYWriter writer;
+        std::cout << "Saving the filtered point cloud." << std::endl;
+        writer.write(outFn, *coloredByCriteria, true, false);
+        QUICK_TIME_END(teWrite_ColorByCriteria)
+
+        std::cout << "Write colored point cloud by criteria in " << teWrite_ColorByCriteria << " ms. " << std::endl;
+    }
+
+    {
+        // Colored point cloud by boundary candidates.
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr coloredByBoundaryCandidates ( new pcl::PointCloud<pcl::PointXYZRGB> );
+        hbd.create_rgb_representation_by_boundary_candidates(coloredByBoundaryCandidates);
+
+        // Save the point cloud.
+        QUICK_TIME_START(teWrite_ColorByBounadryCandidates)
+        std::string outFn = args.outDir + "/ColoredByBoundaryCandidates.ply";
+        pcl::PLYWriter writer;
+        std::cout << "Saving the filtered point cloud." << std::endl;
+        writer.write(outFn, *coloredByBoundaryCandidates, true, false);
+        QUICK_TIME_END(teWrite_ColorByBounadryCandidates)
+
+        std::cout << "Write point cloud by boundary candidates in " << teWrite_ColorByBounadryCandidates << " ms. " << std::endl;
+    }
 
     return 0;
 }

@@ -2,6 +2,7 @@
 // Created by yaoyu on 3/16/20.
 //
 
+#include <cmath>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -17,7 +18,9 @@
 #include <pcl/point_types.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/crop_box.h>
+#include <pcl/filters/extract_indices.h>
 #include <pcl/filters/voxel_grid.h>
+#include <pcl/kdtree/kdtree_flann.h>
 
 #include "Args/Args.hpp"
 #include "Filesystem/Filesystem.hpp"
@@ -141,6 +144,22 @@ void parse_args(int argc, char* argv[], Args& args) {
     }
 }
 
+template < typename pT, typename rT>
+static void down_sample( const typename pcl::PointCloud<pT>::Ptr& pInput,
+                         typename pcl::PointCloud<pT>::Ptr& pOutput,
+                         const std::vector<rT>& leafSize,
+                         rT leafSizeFactor=1.0) {
+    QUICK_TIME_START(teFilter);
+    pcl::VoxelGrid<pT> sor;
+    sor.setLeafSize(leafSize[0]*leafSizeFactor, leafSize[1]*leafSizeFactor, leafSize[2]*leafSizeFactor);
+    sor.setInputCloud(pInput);
+    sor.filter(*pOutput);
+    QUICK_TIME_END(teFilter);
+
+    std::cout << "Down-sampled to " << pOutput->size() << " points. " << std::endl;
+    std::cout << "Voxel filter in " << teFilter << "ms. " << std::endl;
+}
+
 template <typename T>
 static void read_downsample(const std::string& fn, const std::vector<float>& leafSize,
         typename pcl::PointCloud<T>::Ptr& pOutCloud, const bool flagDownsample=false) {
@@ -162,15 +181,7 @@ static void read_downsample(const std::string& fn, const std::vector<float>& lea
     if ( flagDownsample ) {
         // ========== Down-sample by a voxel grid filter. ==========
 
-        QUICK_TIME_START(teFilter);
-        pcl::VoxelGrid<T> sor;
-        sor.setLeafSize(leafSize[0], leafSize[1], leafSize[2]);
-        sor.setInputCloud(pInput);
-        sor.filter(*pOutCloud);
-        QUICK_TIME_END(teFilter);
-
-        std::cout << "Down-sampled to " << pOutCloud->size() << " points. " << std::endl;
-        std::cout << "Voxel filter in " << teFilter << "ms. " << std::endl;
+        down_sample<T, float>(pInput, pOutCloud, leafSize, 1.0);
     } else {
         pOutCloud = pInput;
     }
@@ -252,12 +263,91 @@ static void crop_by_CropBox( const typename pcl::PointCloud<T>::Ptr& inCloud,
     std::cout << "Crop in " << te << "ms. " << std::endl;
 }
 
+template < typename rT >
+static rT equivalent_leaf_size(const std::vector<rT>& leafSizes) {
+    auto acc = static_cast<rT>(0);
+
+    for ( const auto& s : leafSizes ) {
+        acc += s*s;
+    }
+
+    return std::sqrt( acc );
+}
+
+template < typename pT, typename rT >
+static void filter_out_overlapping_points( const typename pcl::PointCloud<pT>::Ptr& pInput,
+        typename pcl::PointCloud<pT>::Ptr& pOutput, rT dist ) {
+    QUICK_TIME_START(te)
+
+    typename pcl::KdTreeFLANN<pT>::Ptr tree ( new pcl::KdTreeFLANN<pT> );
+    tree->setInputCloud(pInput);
+
+    const auto n = pInput->size();
+
+    std::vector<bool> deleteFlags(n);
+    for ( int i = 0; i < n; ++i ) {
+        deleteFlags[i] = false;
+    }
+
+    pcl::PointIndices::Ptr indices (new pcl::PointIndices() );
+
+    std::vector<int> indexR;
+    std::vector<float> squaredDistanceR;
+
+    int idx;
+    int fn = 0;
+    int sn = 0;
+
+    for ( int i = 0; i < n; ++i ) {
+        if ( deleteFlags[i] ) {
+            continue;
+        }
+
+        indexR.clear();
+        squaredDistanceR.clear();
+
+        fn = tree->radiusSearch( *pInput, i, dist, indexR, squaredDistanceR );
+
+        sn = indexR.size();
+
+        if ( 0 == fn ) {
+            continue;
+        }
+
+        for ( int j = 0; j < sn; ++j ) {
+            idx = indexR[j];
+
+            if ( idx != i ) {
+                deleteFlags[ idx ] = true;
+                indices->indices.push_back( idx );
+            }
+        }
+    }
+
+    if ( 0 != indices->indices.size() ) {
+        pcl::ExtractIndices<pT> extract;
+        extract.setInputCloud( pInput );
+        extract.setIndices( indices );
+        extract.setNegative( true );
+        extract.filter( *pOutput );
+
+        std::cout << "Filtering results in " << pOutput->size() << " points. " << std::endl;
+    } else {
+        std::cout << "No overlapping points found. " << std::endl;
+        pOutput = pInput;
+    }
+
+    QUICK_TIME_END(te)
+
+    std::cout << "Filter out overlapping points in " << te << "ms. " << std::endl;
+}
+
 template <typename T>
 static void typed_process(const Args& args) {
     // Read the input file list.
     auto fList = read_file_list(args.inFile);
 
-    typename pcl::PointCloud<T>::Ptr pOutput( new pcl::PointCloud<T> );
+    typename pcl::PointCloud<T>::Ptr pMerged( new pcl::PointCloud<T> );
 
     std::cout << "Start processing..." << std::endl << std::endl;
 
@@ -277,12 +367,21 @@ static void typed_process(const Args& args) {
         crop_by_CropBox<T>(pDownSampled, pCropped, args.corners);
 
         // Merge the point cloud.
-        *pOutput += *pCropped;
+        *pMerged += *pCropped;
 
         // Show loop info.
-        std::cout << "Total accumulated points: " << pOutput->size() << ". " << std::endl;
+        std::cout << "Total accumulated points: " << pMerged->size() << ". " << std::endl;
         std::cout << std::endl;
     }
+
+    typename pcl::PointCloud<T>::Ptr pOutput( new pcl::PointCloud<T> );
+
+    // Filter out the overlapping points.
+    float equivalentLeafSize = equivalent_leaf_size(args.leafSize);
+    std::cout << "Filter the overlapping points..." << std::endl;
+    filter_out_overlapping_points<T>( pMerged, pOutput, equivalentLeafSize / 4.f);
+
+//    down_sample<T, float>( pMerged, pOutput, args.leafSize, 1.0 );
 
     // Save the filtered point cloud.
     QUICK_TIME_START(teWrite);

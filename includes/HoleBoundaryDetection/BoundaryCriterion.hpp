@@ -8,6 +8,7 @@
 #include <algorithm>    // std::sort
 #include <cmath>
 #include <iostream>
+#include <numeric>      // std::iota
 #include <sstream>
 #include <string>
 #include <vector>
@@ -36,7 +37,9 @@ namespace pcu
 template < typename pT, typename realT >
 class BoundaryCriterion {
 public:
-    BoundaryCriterion(): halfDiscSigmaFactor(1.0), shapeSigmaFactor(1.0) {
+    typedef typename ProximityGraph<pT>::Index_t Index_t;
+public:
+    BoundaryCriterion(): neighborDistanceLimit(1e-4), halfDiscSigmaFactor(1.0), shapeSigmaFactor(1.0) {
         const auto oneSecond = static_cast<realT>(1.0/2);
         const auto oneThird  = static_cast<realT>(1.0/3);
         const auto oneFourth = static_cast<realT>(1.0/4);
@@ -63,6 +66,11 @@ public:
 
     ~BoundaryCriterion() = default;
 
+    void set_neighbor_distance_limit(realT d) {
+        assert(d > 0);
+        neighborDistanceLimit = d;
+    }
+
     void set_half_disc_sigma_factor(realT f) {
         assert( f > 0 );
         halfDiscSigmaFactor = f;
@@ -85,22 +93,26 @@ public:
         pProximityGraph = ppg;
     }
 
-    void compute( Eigen::MatrixX<realT>& criteria, int startIdx=0 );
+    void compute( Eigen::MatrixX<realT>& criteria, Eigen::MatrixX<Index_t>& maxAngleNeighbors, Index_t startIdx=0 );
 
 protected:
-    void get_neighbor_points(int idx,
-            const typename ProximityGraph<pT>::Neighbors_t& neighbors,
+    void get_neighbor_points(
+            const std::vector<Index_t>& neighbors,
             typename pcl::PointCloud<pT>::Ptr& neighborPoints);
 
     realT shape_criterion( const typename pcl::PointCloud<pT>::Ptr& points );
 
     void compute_criteria(const pT& point,
                           const typename pcl::PointCloud<pT>::Ptr& neighborPoints,
-                          realT& ac, realT& hc, realT& sc );
+                          typename std::vector<Index_t>& vNeighbors,
+                          realT& ac, realT& hc, realT& sc,
+                          std::vector<Index_t>& maxAngleNeighbors);
 
 protected:
     typename pcl::PointCloud<pT>::Ptr pInputCloud;
     ProximityGraph<pT>* pProximityGraph;
+
+    realT neighborDistanceLimit;
 
     realT halfDiscSigmaFactor;
 
@@ -117,19 +129,25 @@ protected:
     realT shapeSigma2;
 };
 
-template < typename pT, typename realT >
-void BoundaryCriterion<pT, realT>::get_neighbor_points(int idx,
-        const typename ProximityGraph<pT>::Neighbors_t& neighbors, typename pcl::PointCloud<pT>::Ptr& neighborPoints){
-    // Copy the neighbor index into a pcl::PointIndices object.
-    pcl::PointIndices::Ptr neighborsIdx ( new pcl::PointIndices() );
-    neighborsIdx->indices.resize( neighbors.size() );
-    std::copy( neighbors.begin(), neighbors.end(), neighborsIdx->indices.begin() );
+template < typename pT, typename iT >
+static void extract_points( const typename pcl::PointCloud<pT>::Ptr& pInput,
+        typename pcl::PointCloud<pT>::Ptr& pOutput,
+        const std::vector<iT>& indices) {
+    pcl::PointIndices::Ptr pclIndices (new pcl::PointIndices() );
+    pclIndices->indices.resize(indices.size() );
+    std::copy(indices.begin(), indices.end(), pclIndices->indices.begin() );
 
     pcl::ExtractIndices<pT> extract;
-    extract.setInputCloud(pInputCloud);
-    extract.setIndices(neighborsIdx);
+    extract.setInputCloud(pInput);
+    extract.setIndices(pclIndices);
     extract.setNegative(false);
-    extract.filter( *neighborPoints );
+    extract.filter( *pOutput );
+}
+
+template < typename pT, typename realT >
+void BoundaryCriterion<pT, realT>::get_neighbor_points(
+        const std::vector<Index_t>& neighbors, typename pcl::PointCloud<pT>::Ptr& neighborPoints){
+    extract_points<pT, Index_t>( pInputCloud, neighborPoints, neighbors );
 }
 
 template < typename pT, typename realT >
@@ -219,26 +237,46 @@ static void compute_angles_and_distances_2D(
         const typename pcl::PointCloud<pT>::Ptr& points,
         std::vector<realT>& angles,
         std::vector<realT>& distances,
-        realT& avgDistance ) {
-    angles.resize( points->size() );
-    distances.resize( points->size() );
+        realT& avgDistance,
+        realT distLimit,
+        std::vector<int>& validIdx) {
+    const auto n = points->size();
 
-    auto x = static_cast<realT>(0);
-    auto y = static_cast<realT>(0);
+    angles.resize( n );
+    distances.resize( n );
+    validIdx.resize( n );
+
+    auto x       = static_cast<realT>(0);
+    auto y       = static_cast<realT>(0);
     auto accDist = static_cast<realT>(0);
-    auto dist = static_cast<realT>(0);
+    auto dist    = static_cast<realT>(0);
+    int validCount = 0;
 
-    for ( int i = 0; i < points->size(); ++i ) {
+    for ( int i = 0; i < n; ++i ) {
         x = points->at(i).x;
         y = points->at(i).y;
 
-        angles[i] = static_cast<realT>( std::atan2( y, x ) );
         dist = std::sqrt( x*x + y*y );
+
+        if ( dist < distLimit ) {
+            continue;
+        }
+
         accDist += dist;
-        distances[i] = dist;
+
+        distances[validCount] = dist;
+        angles[validCount]    = static_cast<realT>( std::atan2( y, x ) );
+        validIdx[validCount]  = i;
+
+        validCount++;
     }
 
-    avgDistance = static_cast<realT>( 1.0 * accDist / points->size() );
+    avgDistance = static_cast<realT>( 1.0 * accDist / validCount );
+
+    // Resize.
+    angles.resize(validCount);
+    distances.resize(validCount);
+    validIdx.resize(validCount);
 }
 
 template < typename realT >
@@ -246,38 +284,64 @@ static realT checked_angle(realT a, realT pi) {
     return ( a > pi ) ? ( 2*pi - a ) : a ;
 }
 
+template < typename realT, typename iT >
+static void make_angle_pairs( const std::vector<realT>& angles,
+        const std::vector<iT>& vNeighbors,
+        std::vector< std::pair<realT, iT> >& anglePairs ) {
+    const int n = angles.size();
+
+    assert( n != 0 );
+    assert( n == vNeighbors.size() );
+    anglePairs.resize( n );
+
+    for ( int i = 0; i < n; ++i ) {
+        anglePairs[i] = std::make_pair( angles[i], vNeighbors[i] );
+    }
+}
+
 /**
  * It is assumed that the values in soredAngles are sorted in ascending order.
  * @tparam realT
- * @param sortedAngles
- * @return
+ * @param sortedAnglePairs std::pair's, first is the angle, second is the original index.
+ * @param maxAngleIndices A vector stores the indices of the two points that make the maximum angle. The indices are pair.second values.
+ * @return Then angle-criterion.
  */
-template < typename realT >
-static realT angle_criterion( const std::vector<realT>& sortedAngles ) {
-    const auto n = sortedAngles.size();
+template < typename realT, typename iT >
+static realT angle_criterion( const std::vector<std::pair<realT, iT>>& sortedAnglePairs,
+        std::vector<iT>& maxAngleIndices ) {
+    const auto n = sortedAnglePairs.size();
     assert( n > 1 );
+    assert( maxAngleIndices.size() >= 2 );
 
     auto maxAngle = static_cast<realT>(0);
     auto a = static_cast<realT>(0);
+    int neighbor0, neighbor1;
 
     const auto pi = boost::math::constants::pi<realT>();
 
     for ( int i = 1; i < n; ++i ) {
-        a = sortedAngles[i] - sortedAngles[i-1];
+        a = sortedAnglePairs[i].first - sortedAnglePairs[i - 1].first;
 
 //        a = checked_angle(a, pi);
 
         if ( a > maxAngle ) {
             maxAngle = a;
+            neighbor0 = i-1;
+            neighbor1 = i;
         }
     }
 
-//    a = checked_angle(sortedAngles[n-1] - sortedAngles[0], pi);
-    a = 2*pi - ( sortedAngles[n-1] - sortedAngles[0] );
+//    a = checked_angle(sortedAnglePairs[n-1] - sortedAnglePairs[0], pi);
+    a = 2*pi - (sortedAnglePairs[n - 1].first - sortedAnglePairs[0].first );
 
     if ( a > maxAngle ) {
         maxAngle = a;
+        neighbor0 = 0;
+        neighbor1 = n-1;
     }
+
+    maxAngleIndices[0] = sortedAnglePairs[neighbor0].second;
+    maxAngleIndices[1] = sortedAnglePairs[neighbor1].second;
 
 //    // Test use.
 //    std::cout << "maxAngle = " << maxAngle << std::endl;
@@ -375,10 +439,30 @@ realT BoundaryCriterion<pT, realT>::shape_criterion(const typename pcl::PointClo
     return std::exp( -dist*dist / shapeSigma2 );
 }
 
+template < typename T, typename iT >
+static void copy_values( const T& from, T& to, const iT& indices ) {
+    if ( &from == &to ) {
+        std::stringstream ss;
+        ss << "The address of 'from' and 'to' are the same. ";
+        throw( std::runtime_error( ss.str() ) );
+    }
+
+    const int n = indices.size();
+
+    to.resize( n );
+
+    for ( int i = 0; i < n; ++i ) {
+        to[i] = from[ indices[i] ];
+    }
+}
+
 template < typename pT, typename realT >
 void BoundaryCriterion<pT, realT>::compute_criteria(
-        const pT& point, const typename pcl::PointCloud<pT>::Ptr& neighborPoints,
-        realT& ac, realT& hc, realT& sc ) {
+        const pT& point,
+        const typename pcl::PointCloud<pT>::Ptr& neighborPoints,
+        typename std::vector<Index_t>& vNeighbors,
+        realT& ac, realT& hc, realT& sc,
+        std::vector<Index_t>& maxAngleNeighbors ) {
     auto criterion = static_cast<realT>(0);
 
 //    // Test use: add the current point to the set of neighbor points.
@@ -408,6 +492,7 @@ void BoundaryCriterion<pT, realT>::compute_criteria(
     pcl::transformPointCloud( *neighborPoints, *transformedNeighbors, tm );
 
 //    // Test use.
+//    for ( const auto& vn : vNeighbors ) std::cout << vn << ", "; std::cout << std::endl;
 //    pcu::list_points<pT>( neighborPoints, "neighborPoints: " );
 //    pcu::list_points<pT>( projected, "projected: " );
 //    pcu::list_points<pT>( transformed, "transformed: " );
@@ -416,8 +501,20 @@ void BoundaryCriterion<pT, realT>::compute_criteria(
     // Compute all angles.
     std::vector<realT> angles;
     std::vector<realT> distances;
+    std::vector<int> validIdx;
     realT avgDistance;
-    compute_angles_and_distances_2D<pT, realT>(transformed, angles, distances, avgDistance);
+    compute_angles_and_distances_2D<pT, realT>(
+            transformed, angles, distances, avgDistance,
+            neighborDistanceLimit, validIdx);
+
+    // Copy the valid values.
+    std::vector<Index_t> vNeighborsFiltered;
+    copy_values(vNeighbors, vNeighborsFiltered, validIdx);
+
+    typename pcl::PointCloud<pT>::Ptr transformedFiltered ( new pcl::PointCloud<pT> );
+    typename pcl::PointCloud<pT>::Ptr transformedNeighborsFiltered ( new pcl::PointCloud<pT> );
+    extract_points<pT, Index_t>( transformed, transformedFiltered, validIdx );
+    extract_points<pT, Index_t>( transformedNeighbors, transformedNeighborsFiltered, validIdx );
 
 //    // Test use.
 //    std::cout << "Angles before sorting." << std::endl;
@@ -426,8 +523,12 @@ void BoundaryCriterion<pT, realT>::compute_criteria(
 //    }
 //    std::cout << std::endl;
 
+    // Make angle-pairs.
+    std::vector< std::pair<realT, Index_t> > anglePairs;
+    make_angle_pairs( angles, vNeighborsFiltered, anglePairs );
+
     // Sort angle.
-    std::sort( angles.begin(), angles.end() );
+    std::sort( anglePairs.begin(), anglePairs.end() );
 
 //    // Test use.
 //    std::cout << "Angles after sorting." << std::endl;
@@ -437,28 +538,35 @@ void BoundaryCriterion<pT, realT>::compute_criteria(
 //    std::cout << std::endl;
 
     // Angle criterion.
-    ac = angle_criterion(angles);
+    ac = angle_criterion(anglePairs, maxAngleNeighbors);
 
 //    // Test use.
 //    std::cout << "criterion = " << criterion << std::endl;
 //    throw(std::runtime_error("Test!"));
 
     // Half-disc criterion.
-    hc = half_disc_criterion<pT, realT>( transformed, distances, avgDistance, halfDiscSigmaFactor );
+    hc = half_disc_criterion<pT, realT>( transformedFiltered, distances, avgDistance, halfDiscSigmaFactor );
 
 //    // Test use.
 //    throw(std::runtime_error("Test!"));
 
     // Shape criterion. This is a protected member-function.
-    sc = shape_criterion( transformedNeighbors );
+    sc = shape_criterion( transformedNeighborsFiltered );
 
 //    // Test use.
 //    std::cout << "point = " << point << std::endl;
 //    pcu::list_points<pT>( transformedNeighbors, "transformedNeighbors: " );
+
+    // Copy the filtered neighbors back to vNeighbors.
+    vNeighbors.resize( vNeighborsFiltered.size() );
+    std::copy( vNeighborsFiltered.begin(), vNeighborsFiltered.end(), vNeighbors.begin() );
 }
 
 template < typename pT, typename realT >
-void BoundaryCriterion<pT, realT>::compute( Eigen::MatrixX<realT>& criteria, int startIdx ) {
+void BoundaryCriterion<pT, realT>::compute(
+        Eigen::MatrixX<realT>& criteria,
+        Eigen::MatrixX<Index_t>& maxAngleNeighbors,
+        Index_t startIdx ) {
     assert(pInputCloud.get() != nullptr);
     assert(pProximityGraph != nullptr);
     assert( startIdx >=0 && startIdx < pInputCloud->size() );
@@ -466,6 +574,7 @@ void BoundaryCriterion<pT, realT>::compute( Eigen::MatrixX<realT>& criteria, int
     QUICK_TIME_START(te)
     // Initialize the criteria.
     criteria = Eigen::MatrixXf::Zero( pInputCloud->size(), 3 );
+    maxAngleNeighbors = Eigen::MatrixXi::Zero( pInputCloud->size(), 2 );
 
     typename pcl::PointCloud<pT>::Ptr neighborPoints (new pcl::PointCloud<pT>);
 
@@ -473,24 +582,36 @@ void BoundaryCriterion<pT, realT>::compute( Eigen::MatrixX<realT>& criteria, int
     auto hc = static_cast<realT>(0); // Half-disc criterion.
     auto sc = static_cast<realT>(0); // Shape criterion.
 
+    std::vector<Index_t> maxAngleNeighborIndex(2);
+
     // Loop over all the points in the point cloud.
-    for ( int i = startIdx; i < pInputCloud->size(); ++i ) {
+    for ( Index_t i = startIdx; i < pInputCloud->size(); ++i ) {
         // Get the neighbors.
         typename ProximityGraph<pT>::Neighbors_t& neighbors =
                 pProximityGraph->get_neighbors(i);
 
+        // Convert the neighbors to std::vector type;
+        std::vector<Index_t> vNeighbors( neighbors.begin(), neighbors.end() );
+
         // Get the sub-set of points.
         neighborPoints->clear();
-        get_neighbor_points(i, neighbors, neighborPoints);
+        get_neighbor_points( vNeighbors, neighborPoints);
 
         // Compute all the criteria.
-        compute_criteria((*pInputCloud)[i], neighborPoints,
-                                ac, hc, sc);
+        compute_criteria((*pInputCloud)[i], neighborPoints, vNeighbors,
+                ac, hc, sc, maxAngleNeighborIndex);
+
+        maxAngleNeighbors(i, 0) = maxAngleNeighborIndex[0];
+        maxAngleNeighbors(i, 1) = maxAngleNeighborIndex[1];
 
         // Update the criteria.
         criteria(i, 0) = ac;
         criteria(i, 1) = hc;
         criteria(i, 2) = sc;
+
+        // Update the proximity graph.
+        neighbors.clear();
+        std::copy( vNeighbors.begin(), vNeighbors.end(), std::inserter(neighbors, neighbors.end()) );
     }
 
     QUICK_TIME_END(te)

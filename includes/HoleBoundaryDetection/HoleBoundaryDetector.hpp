@@ -35,19 +35,26 @@ public:
     void set_point_cloud(PC_t::Ptr& p);
     void set_proximity_graph_params(int k, double radius, int showDetailBase=100000);
     ProximityGraph<P_t>& get_proximity_graph();
-    void set_criteria_computation_start_index(int idx);
+    void set_criterion_computation_start_index(int idx);
+    void set_criterion_params(float fA, float fH, float fS, float t);
 
     void process();
 
-    void create_rgb_representation(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& pOutput);
+    void create_rgb_representation_by_criteria(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& pOutput);
+    void create_rgb_representation_by_boundary_candidates( pcl::PointCloud<pcl::PointXYZRGB>::Ptr& pOutput );
 
 protected:
     void build_proximity_graph();
     void compute_criteria();
+    void coherence_filter( std::vector<bool>& vbFlag, std::vector<int>& candidates );
+    void coherence_filter();
 
     template <typename T>
     void make_plane_coefficients( const pcl::PointNormal& pn,
             T& a, T& b, T& c, T& d );
+
+    bool criterion_over_threshold( float ac, float hc, float sc );
+    void find_candidates_by_criteria( std::vector<bool>& vbFlag, std::vector<int>& candidates );
 
 protected:
     PC_t::Ptr pInput;
@@ -59,6 +66,14 @@ protected:
 
     int criteriaComputationStartIdx;
     Eigen::MatrixXf criteria;
+    Eigen::MatrixXi maxAngleNeighbors;
+
+    float factorAngleCriterion;
+    float factorHalfDiscCriterion;
+    float factorShapeCriterion;
+    float criterionThreshold;
+
+    std::vector<int> boundaryIndices;
 };
 
 template < typename T >
