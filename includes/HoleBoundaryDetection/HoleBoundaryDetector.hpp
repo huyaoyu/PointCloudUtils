@@ -67,13 +67,14 @@ protected:
     int criteriaComputationStartIdx;
     Eigen::MatrixXf criteria;
     Eigen::MatrixXi maxAngleNeighbors;
+    Eigen::MatrixXf rp; // The average distance.
 
     float factorAngleCriterion;
     float factorHalfDiscCriterion;
     float factorShapeCriterion;
     float criterionThreshold;
 
-    std::vector<int> boundaryIndices;
+    std::vector<int> boundaryCandidates;
 };
 
 template < typename T >

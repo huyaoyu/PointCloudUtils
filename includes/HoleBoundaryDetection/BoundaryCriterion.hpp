@@ -93,7 +93,9 @@ public:
         pProximityGraph = ppg;
     }
 
-    void compute( Eigen::MatrixX<realT>& criteria, Eigen::MatrixX<Index_t>& maxAngleNeighbors, Index_t startIdx=0 );
+    void compute( Eigen::MatrixX<realT>& criteria,
+            Eigen::MatrixX<Index_t>& maxAngleNeighbors,
+            Eigen::MatrixX<realT>& rp, Index_t startIdx=0 );
 
 protected:
     void get_neighbor_points(
@@ -106,7 +108,8 @@ protected:
                           const typename pcl::PointCloud<pT>::Ptr& neighborPoints,
                           typename std::vector<Index_t>& vNeighbors,
                           realT& ac, realT& hc, realT& sc,
-                          std::vector<Index_t>& maxAngleNeighbors);
+                          std::vector<Index_t>& maxAngleNeighbors,
+                          realT& avgDistance );
 
 protected:
     typename pcl::PointCloud<pT>::Ptr pInputCloud;
@@ -462,7 +465,8 @@ void BoundaryCriterion<pT, realT>::compute_criteria(
         const typename pcl::PointCloud<pT>::Ptr& neighborPoints,
         typename std::vector<Index_t>& vNeighbors,
         realT& ac, realT& hc, realT& sc,
-        std::vector<Index_t>& maxAngleNeighbors ) {
+        std::vector<Index_t>& maxAngleNeighbors,
+        realT& avgDistance ) {
     auto criterion = static_cast<realT>(0);
 
 //    // Test use: add the current point to the set of neighbor points.
@@ -502,7 +506,7 @@ void BoundaryCriterion<pT, realT>::compute_criteria(
     std::vector<realT> angles;
     std::vector<realT> distances;
     std::vector<int> validIdx;
-    realT avgDistance;
+
     compute_angles_and_distances_2D<pT, realT>(
             transformed, angles, distances, avgDistance,
             neighborDistanceLimit, validIdx);
@@ -566,6 +570,7 @@ template < typename pT, typename realT >
 void BoundaryCriterion<pT, realT>::compute(
         Eigen::MatrixX<realT>& criteria,
         Eigen::MatrixX<Index_t>& maxAngleNeighbors,
+        Eigen::MatrixX<realT>& rp,
         Index_t startIdx ) {
     assert(pInputCloud.get() != nullptr);
     assert(pProximityGraph != nullptr);
@@ -575,12 +580,14 @@ void BoundaryCriterion<pT, realT>::compute(
     // Initialize the criteria.
     criteria = Eigen::MatrixXf::Zero( pInputCloud->size(), 3 );
     maxAngleNeighbors = Eigen::MatrixXi::Zero( pInputCloud->size(), 2 );
+    rp = Eigen::MatrixXf::Zero( pInputCloud->size(), 1 );
 
     typename pcl::PointCloud<pT>::Ptr neighborPoints (new pcl::PointCloud<pT>);
 
     auto ac = static_cast<realT>(0); // Angle criterion.
     auto hc = static_cast<realT>(0); // Half-disc criterion.
     auto sc = static_cast<realT>(0); // Shape criterion.
+    auto ad = static_cast<realT>(0); // Average distance.
 
     std::vector<Index_t> maxAngleNeighborIndex(2);
 
@@ -598,8 +605,8 @@ void BoundaryCriterion<pT, realT>::compute(
         get_neighbor_points( vNeighbors, neighborPoints);
 
         // Compute all the criteria.
-        compute_criteria((*pInputCloud)[i], neighborPoints, vNeighbors,
-                ac, hc, sc, maxAngleNeighborIndex);
+        compute_criteria( (*pInputCloud)[i], neighborPoints, vNeighbors,
+                ac, hc, sc, maxAngleNeighborIndex, ad );
 
         maxAngleNeighbors(i, 0) = maxAngleNeighborIndex[0];
         maxAngleNeighbors(i, 1) = maxAngleNeighborIndex[1];
@@ -608,6 +615,8 @@ void BoundaryCriterion<pT, realT>::compute(
         criteria(i, 0) = ac;
         criteria(i, 1) = hc;
         criteria(i, 2) = sc;
+
+        rp(i, 0) = ad;
 
         // Update the proximity graph.
         neighbors.clear();

@@ -57,7 +57,7 @@ void HBDetector::compute_criteria() {
     bc.set_point_cloud(pInput);
     bc.set_proximity_graph(&proximityGraph);
 
-    bc.compute(criteria, maxAngleNeighbors, criteriaComputationStartIdx);
+    bc.compute(criteria, maxAngleNeighbors, rp, criteriaComputationStartIdx);
 }
 
 bool HBDetector::criterion_over_threshold( float ac, float hc, float sc ) {
@@ -114,12 +114,12 @@ void HBDetector::coherence_filter( std::vector<bool>& vbFlag, std::vector<int>& 
             n0 = maxAngleNeighbors(c, 0);
             n1 = maxAngleNeighbors(c, 1);
 
-            // Test use.
-            if ( c == 35595 ) {
-                std::cout << "c: " << c << ", "
-                          << "n0: " << n0 << ", "
-                          << "n1: " << n1 << std::endl;
-            }
+//            // Test use.
+//            if ( c == 35595 ) {
+//                std::cout << "c: " << c << ", "
+//                          << "n0: " << n0 << ", "
+//                          << "n1: " << n1 << std::endl;
+//            }
 
             if ( vbFlag[n0] == true && vbFlag[n1] == true ) {
                 tempCandidates.push_back(c);
@@ -138,7 +138,8 @@ void HBDetector::coherence_filter( std::vector<bool>& vbFlag, std::vector<int>& 
             vbFlag[i] = false;
         }
 
-        // Test use.
+        // For now only perform once since it tends to
+        // remove all the points along along chain of candidates.
         break;
     }
 }
@@ -150,9 +151,9 @@ void HBDetector::coherence_filter() {
     std::vector<bool> vbFlag( pInput->size() );
 
     // Create the initial boundary candidates.
-    find_candidates_by_criteria( vbFlag, boundaryIndices );
+    find_candidates_by_criteria(vbFlag, boundaryCandidates );
 
-    coherence_filter( vbFlag, boundaryIndices );
+    coherence_filter(vbFlag, boundaryCandidates );
 
     QUICK_TIME_END(te)
 
@@ -235,7 +236,7 @@ void HBDetector::create_rgb_representation_by_boundary_candidates( pcl::PointClo
         pOutput->at(i).rgba = 0xFFFFFFFF; // Wight.
     }
 
-    for ( const int& i : boundaryIndices ) {
+    for ( const int& i : boundaryCandidates ) {
         pOutput->at(i).rgba = 0xFFFF0000; // Red.
     }
 
