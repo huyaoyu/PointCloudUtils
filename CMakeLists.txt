@@ -48,6 +48,8 @@ add_executable(${EXE_TRY_DISJOINT_SET} src/TryDisjointSet.cpp)
 
 set(EXE_HOLE_BOUNDARY_DETECTION HoleBoundaryDetection)
 add_executable(${EXE_HOLE_BOUNDARY_DETECTION}
+        includes/Visualization/Color.hpp
+        includes/PCCommon/extraction.hpp
         includes/HoleBoundaryDetection/BoundaryCriterion.hpp
         src/HoleBoundaryDetection/ProximityGraph.cpp includes/HoleBoundaryDetection/ProximityGraph.hpp
         src/HoleBoundaryDetection/HoleBoundaryDetector.cpp includes/HoleBoundaryDetection/HoleBoundaryDetector.hpp

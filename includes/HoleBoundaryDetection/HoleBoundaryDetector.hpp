@@ -16,6 +16,7 @@
 #include <pcl/point_types.h>
 #include <pcl/kdtree/kdtree_flann.h>
 
+#include "Graph/Edge.hpp"
 #include "HoleBoundaryDetection/ProximityGraph.hpp"
 #include "HoleBoundaryDetection/BoundaryCriterion.hpp"
 #include "Profiling/SimpleTime.hpp"
@@ -42,24 +43,36 @@ public:
 
     void create_rgb_representation_by_criteria(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& pOutput);
     void create_rgb_representation_by_boundary_candidates( pcl::PointCloud<pcl::PointXYZRGB>::Ptr& pOutput );
+    void create_rgb_representation_by_disjoint_candidates( pcl::PointCloud<pcl::PointXYZRGB>::Ptr& pOutput );
 
 protected:
     void build_proximity_graph();
     void compute_criteria();
     void coherence_filter( std::vector<bool>& vbFlag, std::vector<int>& candidates );
     void coherence_filter();
+    void make_disjoint_boundary_candidates();
 
     template <typename T>
     void make_plane_coefficients( const pcl::PointNormal& pn,
             T& a, T& b, T& c, T& d );
 
+    float criterion_value( float ac, float hc, float sc );
     bool criterion_over_threshold( float ac, float hc, float sc );
     void find_candidates_by_criteria( std::vector<bool>& vbFlag, std::vector<int>& candidates );
+
+    void map_indices_in_proximity_graph( ProximityGraph<P_t>& pg, const std::vector<int>& reference );
+    void create_edges_from_points( const std::vector<int>& referenceIndices,
+            const ProximityGraph<P_t>& pg,
+            std::vector<Edge<int, float>>& edges );
+    void make_disjoint_sets_from_edges(
+            const std::vector<Edge<int, float>>& edges,
+            const std::vector<int>& references,
+            std::vector<std::vector<int>>& disjointSets );
 
 protected:
     PC_t::Ptr pInput;
 
-    ProximityGraph<P_t> proximityGraph;
+    KRProximityGraph<P_t> proximityGraph;
     int    pgK;
     double pgR;
     int    pgSDB; // Show detail base.
@@ -75,6 +88,8 @@ protected:
     float criterionThreshold;
 
     std::vector<int> boundaryCandidates;
+
+    std::vector< std::vector<int> > disjointBoundaryCandidates;
 };
 
 template < typename T >

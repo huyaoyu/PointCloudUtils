@@ -28,6 +28,7 @@
 
 #include "Geometry/TransformHelpers.hpp"
 #include "HoleBoundaryDetection/ProximityGraph.hpp"
+#include "PCCommon/extraction.hpp"
 #include "Profiling/SimpleTime.hpp"
 #include "Visualization/ListPoints.hpp"
 
@@ -131,21 +132,6 @@ protected:
     realT shapeSigma;
     realT shapeSigma2;
 };
-
-template < typename pT, typename iT >
-static void extract_points( const typename pcl::PointCloud<pT>::Ptr& pInput,
-        typename pcl::PointCloud<pT>::Ptr& pOutput,
-        const std::vector<iT>& indices) {
-    pcl::PointIndices::Ptr pclIndices (new pcl::PointIndices() );
-    pclIndices->indices.resize(indices.size() );
-    std::copy(indices.begin(), indices.end(), pclIndices->indices.begin() );
-
-    pcl::ExtractIndices<pT> extract;
-    extract.setInputCloud(pInput);
-    extract.setIndices(pclIndices);
-    extract.setNegative(false);
-    extract.filter( *pOutput );
-}
 
 template < typename pT, typename realT >
 void BoundaryCriterion<pT, realT>::get_neighbor_points(

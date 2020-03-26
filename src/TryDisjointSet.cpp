@@ -181,5 +181,23 @@ int main(int argc, char* argv[])
 
     display_graph(vertices, edgesMST);
 
+    std::cout << "The mapParent. " << std::endl;
+    for ( const auto& mp : mapParent ) {
+        std::cout << "( " << mp.first << ", "
+                  << mp.second << " ) " << std::endl;
+    }
+    std::cout << std::endl;
+
+    // Flatten the sub-sets.
+
+    djs.compress_sets( vertices.begin(), vertices.end() );
+
+    std::cout << "The mapParent after flatten. " << std::endl;
+    for ( const auto& mp : mapParent ) {
+        std::cout << "( " << mp.first << ", "
+                  << mp.second << " ) " << std::endl;
+    }
+    std::cout << std::endl;
+
     return 0;
 }

@@ -81,6 +81,8 @@ public:
     std::string inputPrefix; // The prefix of the files listed in "inFile".
     bool flagDownsample;
     std::vector<float> leafSize; // The leaf size of the voxel down-sample filter. 3-element vector.
+    bool flagIslandFilter;
+    float islandRadius;
 };
 
 const std::string Args::PC_TYPE_XYZRGB  = "XYZRGB";
@@ -108,7 +110,9 @@ void parse_args(int argc, char* argv[], Args& args) {
                 ("input-prefix", bpo::value< std::string >(&args.inputPrefix)->default_value("."), "The prefix of the input files listed in the input file.")
                 ("bbox", bpo::value< std::string >(&bBoxString), "x0, y0, z0, x1, y1, z1")
                 ("down-sample", bpo::value< int >()->implicit_value(1), "Set this flag to enable down-sample.")
-                ("leaf-size", bpo::value< std::string >(&leafSizeString)->default_value("0.1, 0.1, 0.1"), "leaf size");
+                ("leaf-size", bpo::value< std::string >(&leafSizeString)->default_value("0.1, 0.1, 0.1"), "leaf size")
+                ("island-filter", bpo::value< bool >()->implicit_value(false), "Set this flag to enable island-filter.")
+                ("island-radius", bpo::value< float >(&args.islandRadius)->default_value(0.05), "The radius of island filter.");
 
         bpo::positional_options_description posOptDesc;
         posOptDesc.add("infile", 1).add("outfile", 1).add("bbox", 1);
@@ -122,6 +126,12 @@ void parse_args(int argc, char* argv[], Args& args) {
             args.flagDownsample = true;
         } else {
             args.flagDownsample = false;
+        }
+
+        if ( optVM.count("island-filter") ) {
+            args.flagIslandFilter = true;
+        } else {
+            args.flagIslandFilter = false;
         }
     }
     catch(std::exception& e)
@@ -342,6 +352,68 @@ static void filter_out_overlapping_points( const typename pcl::PointCloud<pT>::P
     std::cout << "Filter out overlapping points in " << te << "ms. " << std::endl;
 }
 
+static int num_points_in_quater_circle(float radius, float step) {
+    assert( step > 0 );
+    assert( radius >= step );
+
+    const auto steps = static_cast<int>( std::floor( radius/step ) );
+
+    int n = 0;
+
+    for ( int i = 0; i < steps; ++i ) {
+        n += static_cast<int>( std::floor( std::sqrt( radius*radius - (i*step)*(i*step) ) / step ) );
+    }
+
+    return n;
+}
+
+template < typename pT, typename rT >
+static void filter_out_island_points( const typename pcl::PointCloud<pT>::Ptr& pInput,
+        typename pcl::PointCloud<pT>::Ptr& pOutput, rT dist, int nLimit ) {
+    QUICK_TIME_START(te)
+
+    typename pcl::KdTreeFLANN<pT>::Ptr tree ( new pcl::KdTreeFLANN<pT> );
+    tree->setInputCloud(pInput);
+
+    const auto n = pInput->size();
+
+    pcl::PointIndices::Ptr indices (new pcl::PointIndices() );
+
+    std::vector<int> indexR;
+    std::vector<float> squaredDistanceR;
+
+    int fn = 0;
+
+    for ( int i = 0; i < n; ++i ) {
+        indexR.clear();
+        squaredDistanceR.clear();
+
+        fn = tree->radiusSearch( *pInput, i, dist, indexR, squaredDistanceR );
+
+        if ( fn < nLimit ) {
+            indices->indices.push_back( i );
+        }
+    }
+
+    if ( 0 != indices->indices.size() ) {
+        pcl::ExtractIndices<pT> extract;
+        extract.setInputCloud( pInput );
+        extract.setIndices( indices );
+        extract.setNegative( true );
+        extract.filter( *pOutput );
+
+        std::cout << "Removed island points: " << indices->indices.size() << std::endl;
+        std::cout << "Filtering results in " << pOutput->size() << " points. " << std::endl;
+    } else {
+        std::cout << "No island points found. " << std::endl;
+        pOutput = pInput;
+    }
+
+    QUICK_TIME_END(te)
+
+    std::cout << "Filter out island points in " << te << "ms. " << std::endl;
+}
+
 template <typename T>
 static void typed_process(const Args& args) {
     // Read the input file list.
@@ -375,13 +447,24 @@ static void typed_process(const Args& args) {
     }
 
     typename pcl::PointCloud<T>::Ptr pOutput( new pcl::PointCloud<T> );
+    typename pcl::PointCloud<T>::Ptr pNonOverlap( new pcl::PointCloud<T> );
 
     // Filter out the overlapping points.
     float equivalentLeafSize = equivalent_leaf_size(args.leafSize);
     std::cout << "Filter the overlapping points..." << std::endl;
-    filter_out_overlapping_points<T>( pMerged, pOutput, equivalentLeafSize / 4.f);
+    filter_out_overlapping_points<T>( pMerged, pNonOverlap, equivalentLeafSize / 4.f);
 
 //    down_sample<T, float>( pMerged, pOutput, args.leafSize, 1.0 );
+
+    // Island-filter.
+    if ( args.flagIslandFilter ) {
+        int nLimit = num_points_in_quater_circle( args.islandRadius, args.leafSize[0] );
+        nLimit = static_cast<int>(nLimit * 1.5);
+        std::cout << "nLimit for island filter = " << nLimit << std::endl;
+        filter_out_island_points<T>(pNonOverlap, pOutput, args.islandRadius, nLimit);
+    } else {
+        pOutput = pNonOverlap;
+    }
 
     // Save the filtered point cloud.
     QUICK_TIME_START(teWrite);

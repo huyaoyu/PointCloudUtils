@@ -234,5 +234,21 @@ int main(int argc, char* argv[]) {
         std::cout << "Write point cloud by boundary candidates in " << teWrite_ColorByBounadryCandidates << " ms. " << std::endl;
     }
 
+    {
+        // Colored point cloud by disjoint candidates.
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr colored ( new pcl::PointCloud<pcl::PointXYZRGB> );
+        hbd.create_rgb_representation_by_disjoint_candidates(colored);
+
+        // Save the point cloud.
+        QUICK_TIME_START(te)
+        std::string outFn = args.outDir + "/ColoredByDisjointCandidates.ply";
+        pcl::PLYWriter writer;
+        std::cout << "Saving the filtered point cloud." << std::endl;
+        writer.write(outFn, *colored, true, false);
+        QUICK_TIME_END(te)
+
+        std::cout << "Write point cloud by disjoint candidates in " << te << " ms. " << std::endl;
+    }
+
     return 0;
 }
