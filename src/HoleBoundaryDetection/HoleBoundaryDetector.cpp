@@ -4,9 +4,13 @@
 
 #include <boost/pending/disjoint_sets.hpp>
 
+#include <pcl/common/centroid.h> // computeMeanAndCovarianceMatrix().
+#include <pcl/features/feature.h> // solvePlaneParameters().
+
 #include "Graph/Edge.hpp"
 #include "HoleBoundaryDetection/HoleBoundaryDetector.hpp"
 #include "PCCommon/common.hpp"
+#include "PCCommon/extraction.hpp"
 #include "Visualization/Color.hpp"
 
 using namespace pcu;
@@ -15,9 +19,10 @@ HBDetector::HBDetector()
 : pgK(10), pgR(0.02), pgSDB(100000),
   criteriaComputationStartIdx(0),
   factorAngleCriterion(0.4), factorHalfDiscCriterion(0.4), factorShapeCriterion(0.2),
-  criterionThreshold(0.5)
+  criterionThreshold(0.5),
+  pEquivalentNormal(new pcl::PointCloud<pcl::PointNormal>)
 {
-
+    normalViewPoint << 0.0f, 0.0f, 0.0f, 1.0f;
 }
 
 HBDetector::~HBDetector()
@@ -56,6 +61,10 @@ void HBDetector::set_criterion_params(float fA, float fH, float fS, float t) {
     factorHalfDiscCriterion = fH;
     factorShapeCriterion    = fS;
     criterionThreshold      = t;
+}
+
+void HBDetector::set_normal_view_point(float x, float y, float z) {
+    normalViewPoint << x, y, z, 1.0f;
 }
 
 void HBDetector::compute_criteria() {
@@ -386,6 +395,42 @@ void HBDetector::make_disjoint_boundary_candidates() {
     std::cout << "make_disjoint_boundary_candidates() in " << te << "ms. " << std::endl;
 }
 
+void HBDetector::compute_centroid_and_equivalent_normal() {
+    pEquivalentNormal->clear();
+
+    EIGEN_ALIGN16 Eigen::Matrix3f convMat;
+    EIGEN_ALIGN16 Eigen::Vector4f centroid;
+
+    float normalCurvature[4];
+
+    for ( const auto& d : disjointBoundaryCandidates ) {
+        if ( d.size() < 3 ) {
+            continue;
+        }
+
+        // Extract points.
+        pcl::PointIndices::Ptr pclIndices ( new pcl::PointIndices );
+        convert_vector_2_pcl_indices( d, pclIndices );
+
+        // Get the centroid and normal.
+        if (0 == pcl::computeMeanAndCovarianceMatrix( *pInput, *pclIndices, convMat, centroid ) ) {
+            continue;
+        }
+
+        pcl::solvePlaneParameters( convMat,
+                normalCurvature[0], normalCurvature[1], normalCurvature[2], normalCurvature[3] );
+
+        pcl::PointNormal pn;
+        pn.x = centroid(0); pn.y = centroid(1); pn.z = centroid(2);
+        pn.normal_x = normalCurvature[0]; pn.normal_y = normalCurvature[1]; pn.normal_z = normalCurvature[2];
+        pn.curvature = normalCurvature[3];
+
+        pEquivalentNormal->push_back( pn );
+    }
+
+    std::cout << pEquivalentNormal->size() << " equivalent normals found. " << std::endl;
+}
+
 void HBDetector::process(){
     // Build the proximity graph.
     build_proximity_graph();
@@ -398,6 +443,11 @@ void HBDetector::process(){
 
     // Make disjoint sets from the boundary candidates.
     make_disjoint_boundary_candidates();
+
+    // Compute the centroid and equivalent normal of the disjoint sets.
+    compute_centroid_and_equivalent_normal();
+
+    // Identify holes.
 }
 
 void HBDetector::create_rgb_representation_by_criteria(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& pOutput) {
@@ -502,4 +552,14 @@ void HBDetector::create_rgb_representation_by_disjoint_candidates(
     QUICK_TIME_END(te)
 
     std::cout << "Create RGB representation by disjoint candidates in " << te << "ms. " << std::endl;
+}
+
+HBDetector::PC_t::Ptr HBDetector::get_equivalent_normal() {
+    if ( pEquivalentNormal->empty() ) {
+        std::stringstream ss;
+        ss << "pEquivalentNormal has zero points. ";
+        throw( std::runtime_error( ss.str() ) );
+    }
+
+    return pEquivalentNormal;
 }

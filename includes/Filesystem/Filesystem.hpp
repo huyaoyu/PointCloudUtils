@@ -45,6 +45,14 @@ void test_directory(const std::string& dir) {
     }
 }
 
+void test_directory_by_filename( const std::string& fn ) {
+    // Get the file parts.
+    auto parts = get_file_parts(fn);
+
+    // Test the output directory.
+    test_directory( parts[0] );
+}
+
 std::vector<std::string> read_file_list(const std::string& fn)
 {
     std::vector<std::string> fList;

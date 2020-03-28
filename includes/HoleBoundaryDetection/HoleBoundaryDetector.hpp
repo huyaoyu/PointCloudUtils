@@ -38,6 +38,7 @@ public:
     ProximityGraph<P_t>& get_proximity_graph();
     void set_criterion_computation_start_index(int idx);
     void set_criterion_params(float fA, float fH, float fS, float t);
+    void set_normal_view_point(float x, float y, float z);
 
     void process();
 
@@ -45,12 +46,15 @@ public:
     void create_rgb_representation_by_boundary_candidates( pcl::PointCloud<pcl::PointXYZRGB>::Ptr& pOutput );
     void create_rgb_representation_by_disjoint_candidates( pcl::PointCloud<pcl::PointXYZRGB>::Ptr& pOutput );
 
+    PC_t::Ptr get_equivalent_normal();
+
 protected:
     void build_proximity_graph();
     void compute_criteria();
     void coherence_filter( std::vector<bool>& vbFlag, std::vector<int>& candidates );
     void coherence_filter();
     void make_disjoint_boundary_candidates();
+    void compute_centroid_and_equivalent_normal();
 
     template <typename T>
     void make_plane_coefficients( const pcl::PointNormal& pn,
@@ -88,8 +92,10 @@ protected:
     float criterionThreshold;
 
     std::vector<int> boundaryCandidates;
-
     std::vector< std::vector<int> > disjointBoundaryCandidates;
+
+    EIGEN_ALIGN16 Eigen::Vector4f normalViewPoint;
+    PC_t::Ptr pEquivalentNormal;
 };
 
 template < typename T >

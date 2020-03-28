@@ -31,6 +31,21 @@ float distance_two_points( const pT0& p0, const pT1& p1 ) {
     return std::sqrt( d0 * d0 + d1 * d1 + d2 * d2 );
 }
 
+template < typename iT >
+void convert_vector_2_pcl_indices( const std::vector<iT>& v, pcl::PointIndices::Ptr& indices ) {
+    const auto N = v.size();
+
+    if ( N == 0 ) {
+        std::stringstream ss;
+        ss << "Vector is empty. Cannot convert to pcl::PointIndices. ";
+        throw( std::runtime_error( ss.str() ) );
+    }
+
+    indices->indices.resize(N);
+
+    std::copy( v.begin(), v.end(), indices->indices.begin() );
+}
+
 }
 
 #endif //POINTCLOUDUTILS_COMMON_HPP

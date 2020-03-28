@@ -18,6 +18,7 @@
 #include <pcl/kdtree/kdtree_flann.h>
 
 #include "Args/Args.hpp"
+#include "PCCommon/IO.hpp"
 #include "Filesystem/Filesystem.hpp"
 #include "Profiling/SimpleTime.hpp"
 
@@ -134,22 +135,6 @@ static void parse_args(int argc, char* argv[], Args& args) {
     }
 }
 
-template <typename T>
-static void read_point_cloud(const std::string& fn, typename pcl::PointCloud<T>::Ptr& pOutCloud) {
-    // ========== Read the point cloud from the file. ==========
-    std::cout << "Loading points from " << fn << " ... " << std::endl;
-
-    QUICK_TIME_START(teReadPointCloud);
-    if ( pcl::io::loadPLYFile<T>(fn, *pOutCloud) == -1 ) {
-        std::stringstream ss;
-        ss << "Failed to read: " << fn;
-        throw( std::runtime_error(ss.str()) );
-    }
-    QUICK_TIME_END(teReadPointCloud);
-
-    std::cout << pOutCloud->size() << " points loaded in " << teReadPointCloud << "ms. " << std::endl;
-}
-
 template <typename pT>
 static void test_show_proximity_graph_vertex_neighbors(
         typename pcl::PointCloud<pT>::Ptr& pInput,
@@ -184,7 +169,7 @@ int main(int argc, char* argv[]) {
     PC_t::Ptr pInput(new PC_t);
 
     // Read the point cloud.
-    read_point_cloud<P_t>(args.inFile, pInput);
+    pcu::read_point_cloud<P_t>(args.inFile, pInput);
 
     // The hole boundary detector.
     auto hbd = pcu::HBDetector();
@@ -248,6 +233,12 @@ int main(int argc, char* argv[]) {
         QUICK_TIME_END(te)
 
         std::cout << "Write point cloud by disjoint candidates in " << te << " ms. " << std::endl;
+    }
+
+    // Equivalent normal.
+    {
+        std::string outFn = args.outDir + "/EquivalentNormal.ply";
+        pcu::write_point_cloud<pcl::PointNormal>( outFn, hbd.get_equivalent_normal(), false );
     }
 
     return 0;

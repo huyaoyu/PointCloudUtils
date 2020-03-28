@@ -42,6 +42,10 @@ set(EXE_NORMAL_ESTIMATION NormalEstimation)
 add_executable(${EXE_NORMAL_ESTIMATION} src/NormalEstimation.cpp)
 target_link_libraries(${EXE_NORMAL_ESTIMATION} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
+set(EXE_CLUSTER_FILTER ClusterFilter)
+add_executable(${EXE_CLUSTER_FILTER} src/ClusterFilter.cpp)
+target_link_libraries(${EXE_CLUSTER_FILTER} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
+
 set(EXE_TRY_DISJOINT_SET TryDisjointSet)
 add_executable(${EXE_TRY_DISJOINT_SET} src/TryDisjointSet.cpp)
 #target_link_libraries(${EXE_TRY_DISJOINT_SET} )
@@ -50,6 +54,7 @@ set(EXE_HOLE_BOUNDARY_DETECTION HoleBoundaryDetection)
 add_executable(${EXE_HOLE_BOUNDARY_DETECTION}
         includes/Visualization/Color.hpp
         includes/PCCommon/extraction.hpp
+        includes/PCCommon/IO.hpp
         includes/HoleBoundaryDetection/BoundaryCriterion.hpp
         src/HoleBoundaryDetection/ProximityGraph.cpp includes/HoleBoundaryDetection/ProximityGraph.hpp
         src/HoleBoundaryDetection/HoleBoundaryDetector.cpp includes/HoleBoundaryDetection/HoleBoundaryDetector.hpp
