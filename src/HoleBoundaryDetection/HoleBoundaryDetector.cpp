@@ -20,6 +20,7 @@ HBDetector::HBDetector()
   criteriaComputationStartIdx(0),
   factorAngleCriterion(0.4), factorHalfDiscCriterion(0.4), factorShapeCriterion(0.2),
   criterionThreshold(0.5),
+  equivalentNormalAveragingLimit(50),
   pEquivalentNormal(new pcl::PointCloud<pcl::PointNormal>)
 {
     normalViewPoint << 0.0f, 0.0f, 0.0f, 1.0f;
@@ -65,6 +66,11 @@ void HBDetector::set_criterion_params(float fA, float fH, float fS, float t) {
 
 void HBDetector::set_normal_view_point(float x, float y, float z) {
     normalViewPoint << x, y, z, 1.0f;
+}
+
+void HBDetector::set_equivalent_normal_averaging_limit(int limit) {
+    assert( limit > 0 );
+    equivalentNormalAveragingLimit = limit;
 }
 
 void HBDetector::compute_criteria() {
@@ -395,13 +401,64 @@ void HBDetector::make_disjoint_boundary_candidates() {
     std::cout << "make_disjoint_boundary_candidates() in " << te << "ms. " << std::endl;
 }
 
-void HBDetector::compute_centroid_and_equivalent_normal() {
-    pEquivalentNormal->clear();
-
+template < typename pT >
+static void compute_cluster_normal( const typename pcl::PointCloud<pT>::Ptr pInput,
+        const pcl::PointIndices::Ptr pIndices,
+        pcl::PointNormal& pn ) {
     EIGEN_ALIGN16 Eigen::Matrix3f convMat;
     EIGEN_ALIGN16 Eigen::Vector4f centroid;
 
     float normalCurvature[4];
+
+    // Get the centroid and normal.
+    if (0 == pcl::computeMeanAndCovarianceMatrix( *pInput, *pIndices, convMat, centroid ) ) {
+        std::stringstream ss;
+        ss << "Failed to compute a normal. ";
+        throw( std::runtime_error( ss.str() ) );
+    }
+
+    pcl::solvePlaneParameters( convMat,
+            normalCurvature[0], normalCurvature[1], normalCurvature[2], normalCurvature[3] );
+
+    pn.x = centroid(0); pn.y = centroid(1); pn.z = centroid(2);
+    pn.normal_x = normalCurvature[0]; pn.normal_y = normalCurvature[1]; pn.normal_z = normalCurvature[2];
+    pn.curvature = normalCurvature[3];
+}
+
+template < typename pT >
+static void average_cluster_normal( const typename pcl::PointCloud<pT>::Ptr pInput,
+                                    const pcl::PointIndices::Ptr pIndices,
+                                    pcl::PointNormal& pn ) {
+    pT point;
+
+    pn.x = 0.0f; pn.y = 0.0f; pn.z = 0.0f;
+    pn.normal_x = 0.0f; pn.normal_y = 0.0f; pn.normal_z = 0.0f;
+
+    for ( const auto& idx : pIndices->indices ) {
+        point = pInput->at(idx);
+
+        pn.x += point.x;
+        pn.y += point.y;
+        pn.z += point.z;
+        pn.normal_x  += point.normal_x;
+        pn.normal_y  += point.normal_y;
+        pn.normal_z  += point.normal_z;
+        pn.curvature += point.curvature;
+    }
+
+    const auto N = static_cast<float>( pIndices->indices.size() );
+
+    pn.x = pn.x / N;
+    pn.y = pn.y / N;
+    pn.z = pn.z / N;
+    pn.normal_x  = pn.normal_x / N;
+    pn.normal_y  = pn.normal_y / N;
+    pn.normal_z  = pn.normal_z / N;
+    pn.curvature = pn.curvature / N;
+}
+
+void HBDetector::compute_centroid_and_equivalent_normal() {
+    pEquivalentNormal->clear();
 
     for ( const auto& d : disjointBoundaryCandidates ) {
         if ( d.size() < 3 ) {
@@ -412,18 +469,13 @@ void HBDetector::compute_centroid_and_equivalent_normal() {
         pcl::PointIndices::Ptr pclIndices ( new pcl::PointIndices );
         convert_vector_2_pcl_indices( d, pclIndices );
 
-        // Get the centroid and normal.
-        if (0 == pcl::computeMeanAndCovarianceMatrix( *pInput, *pclIndices, convMat, centroid ) ) {
-            continue;
-        }
-
-        pcl::solvePlaneParameters( convMat,
-                normalCurvature[0], normalCurvature[1], normalCurvature[2], normalCurvature[3] );
-
         pcl::PointNormal pn;
-        pn.x = centroid(0); pn.y = centroid(1); pn.z = centroid(2);
-        pn.normal_x = normalCurvature[0]; pn.normal_y = normalCurvature[1]; pn.normal_z = normalCurvature[2];
-        pn.curvature = normalCurvature[3];
+
+        if ( d.size() > equivalentNormalAveragingLimit ) {
+            compute_cluster_normal<P_t>(pInput, pclIndices, pn);
+        } else {
+            average_cluster_normal<P_t>(pInput, pclIndices, pn);
+        }
 
         pEquivalentNormal->push_back( pn );
     }

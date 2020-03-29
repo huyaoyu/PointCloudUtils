@@ -39,6 +39,7 @@ public:
     void set_criterion_computation_start_index(int idx);
     void set_criterion_params(float fA, float fH, float fS, float t);
     void set_normal_view_point(float x, float y, float z);
+    void set_equivalent_normal_averaging_limit(int limit);
 
     void process();
 
@@ -94,6 +95,7 @@ protected:
     std::vector<int> boundaryCandidates;
     std::vector< std::vector<int> > disjointBoundaryCandidates;
 
+    int equivalentNormalAveragingLimit;
     EIGEN_ALIGN16 Eigen::Vector4f normalViewPoint;
     PC_t::Ptr pEquivalentNormal;
 };
