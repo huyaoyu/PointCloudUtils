@@ -1,0 +1,3 @@
+[submodule "includes/DataInterfaces/CSV"]
+	path = includes/DataInterfaces/CSV
+	url = https://github.com/ben-strasser/fast-cpp-csv-parser.git

@@ -3,6 +3,10 @@ project(PointCloudUtils)
 
 set(CMAKE_CXX_STANDARD 14)
 
+# Multi-thread.
+find_package(Threads REQUIRED)
+message(STATUS "Threads_FOUND=${Threads_FOUND}")
+
 # Boost.
 FIND_LIBRARY( LIB_BOOST_FILESYSTEM NAMES boost_filesystem )
 FIND_LIBRARY( LIB_BOOST_SYSTEM NAMES boost_system )
@@ -64,3 +68,16 @@ target_link_libraries(${EXE_HOLE_BOUNDARY_DETECTION} ${LIB_BOOST_SYSTEM} ${LIB_B
 set(EXE_TRY_TRANSFORM_HELPERS TryTransformHelpers)
 add_executable(${EXE_TRY_TRANSFORM_HELPERS} includes/Geometry/TransformHelpers.hpp src/TryTransformHelpers.cpp)
 target_link_libraries(${EXE_TRY_TRANSFORM_HELPERS} Eigen3::Eigen)
+
+set(EXE_CAM_GEOM_TRY_CSVIO CamGeom_TryCSVIO)
+add_executable(${EXE_CAM_GEOM_TRY_CSVIO}
+        includes/CameraGeometry/IO.hpp
+        includes/PCCommon/IO.hpp
+        src/CameraGeometry/TryCSVIO.cpp)
+target_link_libraries(${EXE_CAM_GEOM_TRY_CSVIO} Threads::Threads Eigen3::Eigen ${PCL_LIBRARIES})
+
+set(EXE_CAM_GEOM_TRY_READ_MATRIX CamGeom_TryReadCameraMatrix)
+add_executable(${EXE_CAM_GEOM_TRY_READ_MATRIX}
+        includes/DataInterfaces/Plain/Matrix.hpp
+        src/CameraGeometry/TryReadCameraMatrix.cpp)
+target_link_libraries(${EXE_CAM_GEOM_TRY_READ_MATRIX} Eigen3::Eigen)

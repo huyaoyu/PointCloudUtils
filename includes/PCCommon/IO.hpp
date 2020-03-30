@@ -2,8 +2,8 @@
 // Created by yaoyu on 3/27/20.
 //
 
-#ifndef POINTCLOUDUTILS_IO_HPP
-#define POINTCLOUDUTILS_IO_HPP
+#ifndef POINTCLOUDUTILS_PCCOMMON_IO_HPP
+#define POINTCLOUDUTILS_PCCOMMON_IO_HPP
 
 #include <iostream>
 #include <sstream>
@@ -47,4 +47,4 @@ void write_point_cloud( const std::string& fn, const typename pcl::PointCloud<pT
 }
 
 } // namespace pcu.
-#endif //POINTCLOUDUTILS_IO_HPP
+#endif //POINTCLOUDUTILS_PCCOMMON_IO_HPP
