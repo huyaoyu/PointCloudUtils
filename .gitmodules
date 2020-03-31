@@ -1,3 +1,6 @@
 [submodule "includes/DataInterfaces/CSV"]
 	path = includes/DataInterfaces/CSV
 	url = https://github.com/ben-strasser/fast-cpp-csv-parser.git
+[submodule "includes/DataInterfaces/JSON"]
+	path = includes/DataInterfaces/JSON
+	url = https://github.com/nlohmann/json.git

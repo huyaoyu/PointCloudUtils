@@ -71,7 +71,7 @@ public:
     }
 
     friend std::ostream& operator<<(std::ostream& out, const Args& args) {
-        out << Args::AS_IN_FILE << ": " << args.inFile << std::endl;
+        out << Args::AS_IN_CLOUD << ": " << args.inFile << std::endl;
         out << Args::AS_OUT_FILE << ": " << args.outFile << std::endl;
         out << Args::AS_COMPUTE_TYPE << ": " << args.computeType << std::endl;
         out << Args::AS_POLY_ORDER << ": " << args.polyOrder << std::endl;
@@ -81,7 +81,7 @@ public:
     }
 
 public:
-    static const std::string AS_IN_FILE; // AS stands for argument string
+    static const std::string AS_IN_CLOUD; // AS stands for argument string
     static const std::string AS_OUT_FILE;
     static const std::string AS_COMPUTE_TYPE;
     static const std::string AS_POLY_ORDER;
@@ -99,7 +99,7 @@ public:
     double radius; // The search radius.
 };
 
-const std::string Args::AS_IN_FILE      = "infile";
+const std::string Args::AS_IN_CLOUD      = "infile";
 const std::string Args::AS_OUT_FILE     = "outfile";
 const std::string Args::AS_COMPUTE_TYPE = "compute-type";
 const std::string Args::AS_POLY_ORDER   = "poly-order";
@@ -121,14 +121,14 @@ static void parse_args(int argc, char* argv[], Args& args) {
 
         optDesc.add_options()
                 ("help", "Produce help message.")
-                (Args::AS_IN_FILE.c_str(), bpo::value< std::string >(&(args.inFile))->required(), "Input file.")
+                (Args::AS_IN_CLOUD.c_str(), bpo::value< std::string >(&(args.inFile))->required(), "Input file.")
                 (Args::AS_OUT_FILE.c_str(), bpo::value< std::string >(&(args.outFile))->required(), "Output file.")
                 (Args::AS_COMPUTE_TYPE.c_str(), bpo::value< std::string >(&args.computeType)->default_value(Args::VAS_COMPUTE_TYPE_MLS), "The computation type, MLS or NE.")
                 (Args::AS_POLY_ORDER.c_str(), bpo::value< int >(&args.polyOrder)->default_value(2), "The order of the polynomial.")
                 (Args::AS_RADIUS.c_str(), bpo::value<double>(&args.radius)->default_value(0.05), "The search radius.");
 
         bpo::positional_options_description posOptDesc;
-        posOptDesc.add(Args::AS_IN_FILE.c_str(), 1).add(Args::AS_OUT_FILE.c_str(), 1);
+        posOptDesc.add(Args::AS_IN_CLOUD.c_str(), 1).add(Args::AS_OUT_FILE.c_str(), 1);
 
         bpo::variables_map optVM;
         bpo::store(bpo::command_line_parser(argc, argv).

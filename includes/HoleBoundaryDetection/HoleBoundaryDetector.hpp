@@ -49,6 +49,8 @@ public:
 
     PC_t::Ptr get_equivalent_normal();
 
+    void write_disjoint_sets_and_normal_as_json( const std::string& fn );
+
 protected:
     void build_proximity_graph();
     void compute_criteria();
@@ -98,6 +100,9 @@ protected:
     int equivalentNormalAveragingLimit;
     EIGEN_ALIGN16 Eigen::Vector4f normalViewPoint;
     PC_t::Ptr pEquivalentNormal;
+
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
 template < typename T >

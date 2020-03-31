@@ -72,7 +72,7 @@ public:
     }
 
     friend std::ostream& operator<<(std::ostream& out, const Args& args) {
-        out << Args::AS_IN_FILE << ": " << args.inFile << std::endl;
+        out << Args::AS_IN_CLOUD << ": " << args.inFile << std::endl;
         out << Args::AS_OUT_DIR << ": " << args.outDir << std::endl;
         out << Args::AS_PROXIMITY_GRAPH_K << ": " << args.pgK << std::endl;
         out << Args::AS_PROXIMITY_GRAPH_R << ": " << args.pgR << std::endl;
@@ -84,7 +84,7 @@ public:
     }
 
 public:
-    static const std::string AS_IN_FILE; // AS stands for argument string
+    static const std::string AS_IN_CLOUD; // AS stands for argument string
     static const std::string AS_OUT_DIR;
     static const std::string AS_PROXIMITY_GRAPH_K;
     static const std::string AS_PROXIMITY_GRAPH_R;
@@ -108,7 +108,7 @@ public:
     int    enLimit; // The limit number of points for equivalent normal computation.
 };
 
-const std::string Args::AS_IN_FILE = "infile";
+const std::string Args::AS_IN_CLOUD = "infile";
 const std::string Args::AS_OUT_DIR = "outdir";
 const std::string Args::AS_PROXIMITY_GRAPH_K   = "pg-k";
 const std::string Args::AS_PROXIMITY_GRAPH_R   = "pg-r";
@@ -130,7 +130,7 @@ static void parse_args(int argc, char* argv[], Args& args) {
 
         optDesc.add_options()
                 ("help", "Produce help message.")
-                (Args::AS_IN_FILE.c_str(), bpo::value< std::string >(&(args.inFile))->required(), "Input file.")
+                (Args::AS_IN_CLOUD.c_str(), bpo::value< std::string >(&(args.inFile))->required(), "Input file.")
                 (Args::AS_OUT_DIR.c_str(), bpo::value< std::string >(&(args.outDir))->required(), "Output directory.")
                 (Args::AS_PROXIMITY_GRAPH_K.c_str(), bpo::value< int >(&args.pgK)->default_value(Args::AI_PROXIMITY_GRAPH_K), "The k value for the proximity graph.")
                 (Args::AS_PROXIMITY_GRAPH_R.c_str(), bpo::value< double >(&args.pgR)->default_value(Args::AI_PROXIMITY_GRAPH_R), "The radius for the proximity graph.")
@@ -139,7 +139,7 @@ static void parse_args(int argc, char* argv[], Args& args) {
                 (Args::AS_EN_LIMIT.c_str(), bpo::value< int >(&args.enLimit)->default_value(Args::AI_EN_LIMIT), "The limit number of points for normal averaging.");
 
         bpo::positional_options_description posOptDesc;
-        posOptDesc.add(Args::AS_IN_FILE.c_str(), 1).add(Args::AS_OUT_DIR.c_str(), 1);
+        posOptDesc.add(Args::AS_IN_CLOUD.c_str(), 1).add(Args::AS_OUT_DIR.c_str(), 1);
 
         bpo::variables_map optVM;
         bpo::store(bpo::command_line_parser(argc, argv).
@@ -258,6 +258,12 @@ int main(int argc, char* argv[]) {
     {
         std::string outFn = args.outDir + "/EquivalentNormal.ply";
         pcu::write_point_cloud<pcl::PointNormal>( outFn, hbd.get_equivalent_normal(), false );
+    }
+
+    // The JSON file.
+    {
+        std::string outFn = args.outDir + "/DisjointSets.json";
+        hbd.write_disjoint_sets_and_normal_as_json(outFn);
     }
 
     return 0;

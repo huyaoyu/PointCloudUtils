@@ -2,6 +2,8 @@
 // Created by yaoyu on 3/20/20.
 //
 
+#include <fstream>
+
 #include <boost/pending/disjoint_sets.hpp>
 
 #include <pcl/common/centroid.h> // computeMeanAndCovarianceMatrix().
@@ -69,7 +71,7 @@ void HBDetector::set_normal_view_point(float x, float y, float z) {
 }
 
 void HBDetector::set_equivalent_normal_averaging_limit(int limit) {
-    assert( limit > 0 );
+    assert( limit >= 3 );
     equivalentNormalAveragingLimit = limit;
 }
 
@@ -461,9 +463,9 @@ void HBDetector::compute_centroid_and_equivalent_normal() {
     pEquivalentNormal->clear();
 
     for ( const auto& d : disjointBoundaryCandidates ) {
-        if ( d.size() < 3 ) {
-            continue;
-        }
+//        if ( d.size() < 3 ) {
+//            continue;
+//        }
 
         // Extract points.
         pcl::PointIndices::Ptr pclIndices ( new pcl::PointIndices );
@@ -498,8 +500,6 @@ void HBDetector::process(){
 
     // Compute the centroid and equivalent normal of the disjoint sets.
     compute_centroid_and_equivalent_normal();
-
-    // Identify holes.
 }
 
 void HBDetector::create_rgb_representation_by_criteria(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& pOutput) {
@@ -614,4 +614,98 @@ HBDetector::PC_t::Ptr HBDetector::get_equivalent_normal() {
     }
 
     return pEquivalentNormal;
+}
+
+template < typename vT >
+static void write_array_json(std::ofstream& ofs,
+        const std::string& name, const std::vector<vT>& v,
+        int lineBreak=0, const std::string& indent="    ") {
+    const std::size_t N = v.size();
+
+    ofs << "\"" << name << "\": [ ";
+
+    if ( 0 == lineBreak ) {
+        for ( std::size_t i = 0; i < N-1; ++i ) {
+            ofs << v[i] << ", ";
+        }
+    } else {
+        for ( std::size_t i = 0; i < N-1; ++i ) {
+            ofs << v[i] << ", ";
+
+            if ( 0 == (i+1)%lineBreak && i != 0 ) {
+                ofs << std::endl << indent;
+            }
+        }
+    }
+
+    ofs << v[N-1] << " ]";
+}
+
+template < typename T >
+static void write_array_json(std::ofstream& ofs,
+        const std::string& name, const T* a, int n,
+        int lineBreak=0, const std::string& indent="    ") {
+    ofs << "\"" << name << "\": [ ";
+
+    if ( 0 == lineBreak ) {
+        for ( std::size_t i = 0; i < n-1; ++i ) {
+            ofs << a[i] << ", ";
+        }
+    } else {
+        for ( std::size_t i = 0; i < n-1; ++i ) {
+            ofs << a[i] << ", ";
+
+            if ( 0 == (i+1)%lineBreak && i != 0 ) {
+                ofs << std::endl << indent;
+            }
+        }
+    }
+
+    ofs << a[n-1] << " ]";
+}
+
+void HBDetector::write_disjoint_sets_and_normal_as_json( const std::string& fn ) {
+    const std::string TAB = "    "; // 4-space tab character.
+    const std::string TAB3 = TAB + TAB + TAB;
+    const std::size_t N = disjointBoundaryCandidates.size();
+
+    std::ofstream ofs(fn);
+
+    if ( !ofs.good() ) {
+        std::stringstream ss;
+        ss << fn << " is not good. ";
+        throw( std::runtime_error( ss.str() ) );
+    }
+
+    // The first line.
+    ofs << "{" << std::endl;
+
+    // The root element.
+    ofs << "\"disjointSets\": [" << std::endl;
+
+    for ( std::size_t i = 0; i < N; ++i ) {
+        const P_t point = pEquivalentNormal->at(i);
+
+        ofs << TAB << "{" << std::endl;
+
+        ofs << TAB << TAB << "\"id\": " << i << "," << std::endl;
+
+        ofs << TAB << TAB;
+        write_array_json(ofs, "centroid", point.data, 3);
+        ofs << "," << std::endl << TAB << TAB;
+        write_array_json(ofs, "normal", point.normal, 3);
+        ofs << "," << std::endl << TAB << TAB;
+        write_array_json(ofs, "indices", disjointBoundaryCandidates[i], 10, TAB3);
+
+        if ( i == N - 1 ) {
+            ofs << std::endl << TAB << "}" << std::endl;
+        } else {
+            ofs << std::endl << TAB << "}," << std::endl;
+        }
+    }
+
+    // The last line.
+    ofs << "]}" << std::endl;
+
+    ofs.close();
 }

@@ -131,6 +131,9 @@ protected:
     realT shapeSigmaFactor;
     realT shapeSigma;
     realT shapeSigma2;
+
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
 template < typename pT, typename realT >

@@ -24,6 +24,12 @@ message(STATUS "PCL_INCLUDE_DIRS=${PCL_INCLUDE_DIRS}")
 message(STATUS "PCL_LIBRARY_DIRS=${PCL_LIBRARY_DIRS}")
 add_definitions(${PCL_DEFINITIONS})
 
+# The yaml-cpp package.
+find_package(yaml-cpp REQUIRED)
+message(STATUS "yaml-cpp_FOUND=${yaml-cpp_FOUND}")
+message(STATUS "YAML_CPP_INCLUDE_DIR=${yaml_cpp_INCLUDE_DIR}")
+message(STATUS "YAML_CPP_LIBRARIES=${YAML_CPP_LIBRARIES}")
+
 include_directories(includes)
 
 set(EXE_DOWNSAMPLE DownSample)
@@ -81,3 +87,21 @@ add_executable(${EXE_CAM_GEOM_TRY_READ_MATRIX}
         includes/DataInterfaces/Plain/Matrix.hpp
         src/CameraGeometry/TryReadCameraMatrix.cpp)
 target_link_libraries(${EXE_CAM_GEOM_TRY_READ_MATRIX} Eigen3::Eigen)
+
+set(EXE_YAML_TRY_YAML_CPP YAML_TryYamlCpp)
+add_executable(${EXE_YAML_TRY_YAML_CPP}
+        src/YAML/TryYamlCpp.cpp)
+target_link_libraries(${EXE_YAML_TRY_YAML_CPP} Eigen3::Eigen yaml-cpp)
+
+set(EXE_JSON_TRY_JSON JSON_TryJSON)
+add_executable(${EXE_JSON_TRY_JSON}
+        src/JSON/TryJSON.cpp)
+target_link_libraries(${EXE_JSON_TRY_JSON} Eigen3::Eigen)
+
+set(EXE_HOLE_BOUNDARY_PROJECTION HoleBoundaryProjection)
+add_executable(${EXE_HOLE_BOUNDARY_PROJECTION}
+        includes/PCCommon/extraction.hpp
+        includes/PCCommon/IO.hpp
+        src/HoleBoundaryDetection/HoleBoundaryProjection.cpp)
+target_link_libraries(${EXE_HOLE_BOUNDARY_PROJECTION} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
+

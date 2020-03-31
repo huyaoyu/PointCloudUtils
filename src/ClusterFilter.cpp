@@ -70,7 +70,7 @@ public:
     }
 
     friend std::ostream& operator<<(std::ostream& out, const Args& args) {
-        out << Args::AS_IN_FILE << ": " << args.inFile << std::endl;
+        out << Args::AS_IN_CLOUD << ": " << args.inFile << std::endl;
         out << Args::AS_OUT_FILE << ": " << args.outFile << std::endl;
         out << Args::AS_TOLERANCE << ": " << args.tolerance << std::endl;
         out << Args::AS_MIN_SIZE << ": " << args.minSize << std::endl;
@@ -80,7 +80,7 @@ public:
     }
 
 public:
-    static const std::string AS_IN_FILE; // AS stands for argument string
+    static const std::string AS_IN_CLOUD; // AS stands for argument string
     static const std::string AS_OUT_FILE;
     static const std::string AS_TOLERANCE;
     static const std::string AS_MIN_SIZE;
@@ -94,7 +94,7 @@ public:
     int maxSize;
 };
 
-const std::string Args::AS_IN_FILE   = "infile";
+const std::string Args::AS_IN_CLOUD   = "infile";
 const std::string Args::AS_OUT_FILE  = "outfile";
 const std::string Args::AS_TOLERANCE = "tolerance";
 const std::string Args::AS_MIN_SIZE  = "min-size";
@@ -107,7 +107,7 @@ static void parse_args(int argc, char* argv[], Args& args) {
         bpo::options_description optDesc("Find the hole boundary points of a point cloud.");
 
         optDesc.add_options()
-                (Args::AS_IN_FILE.c_str(), bpo::value< std::string >(&args.inFile)->required(), "Input file.")
+                (Args::AS_IN_CLOUD.c_str(), bpo::value< std::string >(&args.inFile)->required(), "Input file.")
                 (Args::AS_OUT_FILE.c_str(), bpo::value< std::string >(&args.outFile)->required(), "Output file.")
                 (Args::AS_TOLERANCE.c_str(), bpo::value< double >(&args.tolerance)->required(), "The tolerance.")
                 (Args::AS_MIN_SIZE.c_str(), bpo::value< int >(&args.minSize)->required(), "Cluster smaller than this size will be removed.")
@@ -115,7 +115,7 @@ static void parse_args(int argc, char* argv[], Args& args) {
 
         bpo::positional_options_description posOptDesc;
         posOptDesc.add(
-                Args::AS_IN_FILE.c_str(), 1
+                Args::AS_IN_CLOUD.c_str(), 1
                 ).add(Args::AS_OUT_FILE.c_str(), 1
                 ).add(Args::AS_TOLERANCE.c_str(), 1
                 ).add(Args::AS_MIN_SIZE.c_str(), 1

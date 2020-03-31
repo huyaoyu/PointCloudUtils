@@ -50,6 +50,8 @@ public:
 
     int height;
     int width;
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
 template < typename rT >
