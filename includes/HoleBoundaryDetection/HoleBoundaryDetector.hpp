@@ -5,6 +5,7 @@
 #ifndef POINTCLOUDUTILS_HOLEBOUNDARYDETECTOR_HPP
 #define POINTCLOUDUTILS_HOLEBOUNDARYDETECTOR_HPP
 
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -113,6 +114,10 @@ void HBDetector::make_plane_coefficients(const pcl::PointNormal &pn, T& a, T& b,
     c = pn.normal_z;
     d = -( a * pn.x + b * pn.y + c * pn.z );
 }
+
+void read_equivalent_normal_from_json( const std::string& fn,
+        pcl::PointCloud<pcl::PointNormal>::Ptr normal,
+        std::vector<std::vector<int>>& sets );
 
 } // The namespace pcu
 

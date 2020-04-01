@@ -9,6 +9,7 @@
 #include <pcl/common/centroid.h> // computeMeanAndCovarianceMatrix().
 #include <pcl/features/feature.h> // solvePlaneParameters().
 
+#include "DataInterfaces/JSON/single_include/nlohmann/json.hpp"
 #include "Graph/Edge.hpp"
 #include "HoleBoundaryDetection/HoleBoundaryDetector.hpp"
 #include "PCCommon/common.hpp"
@@ -708,4 +709,45 @@ void HBDetector::write_disjoint_sets_and_normal_as_json( const std::string& fn )
     ofs << "]}" << std::endl;
 
     ofs.close();
+}
+
+void pcu::read_equivalent_normal_from_json( const std::string& fn,
+                                       pcl::PointCloud<pcl::PointNormal>::Ptr normal,
+                                       std::vector<std::vector<int>>& sets ) {
+    using json = nlohmann::json;
+
+    std::ifstream ifs(fn);
+    json jExt;
+    ifs >> jExt;
+
+    const auto nSets = jExt["disjointSets"].size();
+    std::cout << "Equivalent normal file has " << nSets << " sets. " << std::endl;
+
+    if ( 0 == nSets ) {
+        std::stringstream ss;
+        ss << "Zero sets found in the equivalent normal. ";
+        throw( std::runtime_error( ss.str() ) );
+    }
+
+    // Resize the point cloud.
+    normal->resize(nSets);
+    sets.resize(nSets);
+
+    for ( int i = 0; i < nSets; ++i ) {
+        pcl::PointNormal point;
+
+        auto& e = jExt["disjointSets"][i];
+
+        point.x = e["centroid"][0].get<float>();
+        point.y = e["centroid"][1].get<float>();
+        point.z = e["centroid"][2].get<float>();
+        point.normal_x = e["normal"][0].get<float>();
+        point.normal_y = e["normal"][1].get<float>();
+        point.normal_z = e["normal"][2].get<float>();
+        point.curvature = 0.0f;
+
+        normal->at(i) = point;
+
+        sets[i] = e["indices"].get< std::vector<int> >();
+    }
 }

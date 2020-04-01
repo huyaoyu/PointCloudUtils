@@ -95,13 +95,15 @@ target_link_libraries(${EXE_YAML_TRY_YAML_CPP} Eigen3::Eigen yaml-cpp)
 
 set(EXE_JSON_TRY_JSON JSON_TryJSON)
 add_executable(${EXE_JSON_TRY_JSON}
-        src/JSON/TryJSON.cpp)
-target_link_libraries(${EXE_JSON_TRY_JSON} Eigen3::Eigen)
+        src/JSON/TryJSON.cpp
+        src/HoleBoundaryDetection/HoleBoundaryDetector.cpp)
+target_link_libraries(${EXE_JSON_TRY_JSON} Eigen3::Eigen ${PCL_LIBRARIES})
 
 set(EXE_HOLE_BOUNDARY_PROJECTION HoleBoundaryProjection)
 add_executable(${EXE_HOLE_BOUNDARY_PROJECTION}
         includes/PCCommon/extraction.hpp
         includes/PCCommon/IO.hpp
-        src/HoleBoundaryDetection/HoleBoundaryProjection.cpp)
-target_link_libraries(${EXE_HOLE_BOUNDARY_PROJECTION} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
+        src/HoleBoundaryDetection/HoleBoundaryProjection.cpp
+        src/HoleBoundaryDetection/HoleBoundaryDetector.cpp)
+target_link_libraries(${EXE_HOLE_BOUNDARY_PROJECTION} Threads::Threads ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 

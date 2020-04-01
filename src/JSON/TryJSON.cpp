@@ -8,7 +8,11 @@
 #include <string>
 #include <vector>
 
+#include <pcl/common/projection_matrix.h>
+#include <pcl/point_types.h>
+
 #include "DataInterfaces/JSON/single_include/nlohmann/json.hpp"
+#include "HoleBoundaryDetection/HoleBoundaryDetector.hpp"
 
 using namespace std;
 
@@ -71,6 +75,23 @@ int main(int argc, char* argv[]) {
     cout << "Size of centroid: " << jExt["disjointSets"][nSets-1]["centroid"].size() << endl;
     cout << "Size of normal: " << jExt["disjointSets"][nSets-1]["normal"].size() << endl;
     cout << "Size of indices: " << jExt["disjointSets"][nSets-1]["indices"].size() << endl;
+
+    // Test hole boundary detector.
+    pcl::PointCloud<pcl::PointNormal>::Ptr pEquivalentNormal ( new pcl::PointCloud<pcl::PointNormal> );
+    vector< vector<int> > sets;
+    pcu::read_equivalent_normal_from_json(argv[1], pEquivalentNormal, sets);
+
+    cout << "pEquivalentNormal->size() = " << pEquivalentNormal->size() << endl;
+    cout << "pEquivalentNormal->at(0) = " << pEquivalentNormal->at(0) << endl;
+    cout << "pEquivalentNormal->at(pEquivalentNormal->size()-1) = " << pEquivalentNormal->at(pEquivalentNormal->size()-1) << endl;
+    cout << "sets.size() = " << sets.size() << endl;
+    cout << "sets[sets.size()-1] = " << endl;
+
+    for ( const auto& c : sets[ sets.size() -1 ] ) {
+        cout << c << ", ";
+    }
+
+    cout << endl;
 
     return 0;
 }

@@ -31,6 +31,8 @@
 template < typename rT >
 void read_camera_poses_csv(const std::string& fn,
         Eigen::VectorXi& id, Eigen::MatrixX<rT>& quat, Eigen::MatrixX<rT>& pos) {
+    QUICK_TIME_START(te)
+
     // A third-party CSV parsing implementation.
     io::CSVReader<8> csvIn(fn);
     csvIn.set_header( "id",
@@ -63,6 +65,10 @@ void read_camera_poses_csv(const std::string& fn,
     id   = Eigen::Map<Eigen::VectorXi>( vId.data(), N );
     quat = Eigen::Map<Eigen::Matrix<rT, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>( vQ.data(), N, 4 );
     pos  = Eigen::Map<Eigen::Matrix<rT, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>( vP.data(), N, 3 );
+
+    QUICK_TIME_END(te)
+
+    std::cout << "Read camera poses from CSV file in " << te << " ms. " << std::endl;
 }
 
 #endif //POINTCLOUDUTILS_CAMERA_GEOMETRY_IO_HPP

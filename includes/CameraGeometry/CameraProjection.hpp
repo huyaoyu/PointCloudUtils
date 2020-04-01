@@ -8,6 +8,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include <Eigen/Dense>
 
@@ -20,7 +21,31 @@ public:
       T( Eigen::Vector3<rT>::Zero() ),
       height(3008), width(4112) {}
 
+    CameraProjection( const CameraProjection<rT>& other ) {
+        this->K = other.K;
+        this->R = other.R;
+        this->T = other.T;
+
+        this->height = other.height;
+        this->width  = other.width;
+    }
+
     ~CameraProjection() = default;
+
+    CameraProjection<rT>& operator = ( const CameraProjection<rT>& other ) {
+        if ( this == &other ) {
+            return *this;
+        }
+
+        this->K = other.K;
+        this->R = other.R;
+        this->T = other.T;
+
+        this->height = other.height;
+        this->width  = other.width;
+
+        return *this;
+    }
 
     void world_2_camera( const Eigen::Vector3<rT>& wp,
                         Eigen::Vector3<rT>& cp );
@@ -132,6 +157,45 @@ bool CameraProjection<rT>::is_world_point_in_image(const Eigen::Vector3<rT> &wp)
     world_2_camera(wp, cp);
 
     return is_camera_point_in_image(cp);
+}
+
+// ========== Utility function. ==========
+template < typename rT >
+void convert_from_quaternion_translation( const Eigen::MatrixX<rT>& quat,
+        const Eigen::MatrixX<rT>& pos,
+        const Eigen::Matrix3<rT>& K,
+        CameraProjection<rT>& cProj ) {
+    cProj.K = K;
+
+    Eigen::Vector4<rT> qv;
+    qv << quat(0,0), quat(0, 1), quat(0, 2), quat(0, 3);
+    qv.normalize();
+
+    Eigen::Quaternion<rT> q(qv);
+
+    cProj.R = q.toRotationMatrix();
+
+    cProj.T << pos(0,0), pos(0,1), pos(0,2);
+}
+
+template < typename rT >
+void convert_from_quaternion_translation_table( const Eigen::MatrixX<rT>& quat,
+        const Eigen::MatrixX<rT>& pos,
+        const Eigen::Matrix3<rT>& K,
+        std::vector< CameraProjection<rT> >& cps ) {
+    const int N = quat.rows();
+
+    assert( N == pos.rows() );
+
+    cps.resize( N );
+
+    for ( int i = 0; i < N; ++i ) {
+        Eigen::MatrixX<rT> quatEntry = quat(i, Eigen::all);
+        Eigen::MatrixX<rT> posEntry  = pos(i, Eigen::all);
+
+        convert_from_quaternion_translation( quatEntry, posEntry, K, cps[i] );
+    }
+
 }
 
 #endif //POINTCLOUDUTILS_INCLUDES_CAMERAGEOMETRY_CAMERAPROJECTION_HPP

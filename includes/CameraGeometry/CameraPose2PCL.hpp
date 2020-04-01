@@ -26,6 +26,8 @@ template < typename rT >
 void convert_camera_poses_2_pcl(
         const Eigen::MatrixX<rT>& quat, const Eigen::MatrixX<rT>& pos,
         typename pcl::PointCloud<pcl::PointNormal>::Ptr pOutput ) {
+    QUICK_TIME_START(te)
+
     const int N = quat.rows();
     assert( N == pos.rows() );
 
@@ -58,6 +60,10 @@ void convert_camera_poses_2_pcl(
         // Save.
         pOutput->at(i) = point;
     }
+
+    QUICK_TIME_END(te)
+
+    std::cout << "Convert camera poses to PCL point cloud in " << te << " ms. " << std::endl;
 }
 
 }
