@@ -18,6 +18,27 @@
 namespace pcu {
 
 template<typename T>
+typename pcl::PointCloud<T>::Ptr read_point_cloud(const std::string &fn) {
+    // ========== Read the point cloud from the file. ==========
+    std::cout << "Loading points from " << fn << " ... " << std::endl;
+
+    QUICK_TIME_START(teReadPointCloud);
+
+    typename pcl::PointCloud<T>::Ptr pOutCloud ( new pcl::PointCloud<T> );
+
+    if (pcl::io::loadPLYFile<T>(fn, *pOutCloud) == -1) {
+        std::stringstream ss;
+        ss << "Failed to read: " << fn;
+        throw (std::runtime_error(ss.str()));
+    }
+    QUICK_TIME_END(teReadPointCloud);
+
+    std::cout << pOutCloud->size() << " points loaded in " << teReadPointCloud << "ms. " << std::endl;
+
+    return pOutCloud;
+}
+
+template<typename T>
 void read_point_cloud(const std::string &fn, typename pcl::PointCloud<T>::Ptr &pOutCloud) {
     // ========== Read the point cloud from the file. ==========
     std::cout << "Loading points from " << fn << " ... " << std::endl;

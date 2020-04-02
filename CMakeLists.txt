@@ -107,3 +107,12 @@ add_executable(${EXE_HOLE_BOUNDARY_PROJECTION}
         src/HoleBoundaryDetection/HoleBoundaryDetector.cpp)
 target_link_libraries(${EXE_HOLE_BOUNDARY_PROJECTION} Threads::Threads ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
+set(EXE_HOLE_BOUNDARY_SAVE_POLYGON_COOR HoleBoundarySavePolygonCoor)
+add_executable(${EXE_HOLE_BOUNDARY_SAVE_POLYGON_COOR}
+        src/HoleBoundaryDetection/SavePolygonCoordinates.cpp)
+target_link_libraries(${EXE_HOLE_BOUNDARY_SAVE_POLYGON_COOR} Eigen3::Eigen ${PCL_LIBRARIES})
+
+set(EXE_CAMERA_GEOMETRY_TRY_EIGEN_QUATERNION CamGeom_TryEigenQuaternion)
+add_executable(${EXE_CAMERA_GEOMETRY_TRY_EIGEN_QUATERNION}
+        src/CameraGeometry/TryEigenQuaternion.cpp)
+target_link_libraries(${EXE_CAMERA_GEOMETRY_TRY_EIGEN_QUATERNION} Eigen3::Eigen)

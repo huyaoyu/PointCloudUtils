@@ -2,6 +2,7 @@
 // Created by yaoyu on 3/30/20.
 //
 
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -15,6 +16,7 @@
 #include "CameraGeometry/CameraPose2PCL.hpp"
 #include "CameraGeometry/IO.hpp"
 #include "DataInterfaces/Plain/Matrix.hpp"
+#include "Filesystem/Filesystem.hpp"
 #include "HoleBoundaryDetection/HoleBoundaryDetector.hpp"
 #include "HoleBoundaryDetection/HoleBoundaryProjector.hpp"
 #include "PCCommon/IO.hpp"
@@ -115,6 +117,40 @@ static void parse_args(int argc, char* argv[], Args& args) {
     }
 }
 
+static void write_hole_polygon_points_json(
+        const std::string &fn,
+        const std::vector<pcu::HoleBoundaryPoints<float>> &hpp ) {
+
+    std::ofstream ofs(fn);
+
+    if ( !ofs.good() ) {
+        std::stringstream ss;
+        ss << fn << " is not good. ";
+        throw( std::runtime_error(ss.str()) );
+    }
+
+    const int N = hpp.size();
+    const std::string TAB = "    ";
+
+    ofs << "{" << std::endl;
+    ofs << "\"hpp\": [" << std::endl;
+
+    for ( int i = 0; i < N; ++i ) {
+        ofs << TAB;
+        hpp[i].write_json_content(ofs, TAB, 1);
+
+        if ( i != N-1 ) {
+            ofs << "," << std::endl;
+        } else {
+            ofs << " ]" << std::endl;
+        }
+    }
+
+    ofs << "}" << std::endl;
+
+    ofs.close();
+}
+
 int main(int argc, char* argv[]) {
     std::cout << "Hello, HoleBoundaryProjection! " << std::endl;
 
@@ -126,16 +162,16 @@ int main(int argc, char* argv[]) {
     std::cout << args << std::endl;
 
     // Read the point cloud.
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr pInput ( new pcl::PointCloud<pcl::PointXYZRGB> );
-    pcu::read_point_cloud<pcl::PointXYZRGB>( args.inCloud, pInput );
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr pInCloud ( new pcl::PointCloud<pcl::PointXYZRGB> );
+    pcu::read_point_cloud<pcl::PointXYZRGB>( args.inCloud, pInCloud );
 
     // Read the JSON file.
     pcl::PointCloud<pcl::PointNormal>::Ptr pEquivalentNormals ( new pcl::PointCloud<pcl::PointNormal> );
     std::vector< std::vector<int> > candidateSets;
     pcu::read_equivalent_normal_from_json(args.inJson, pEquivalentNormals, candidateSets);
 
-    std::shared_ptr< std::vector< std::vector<int> > > pCandidateSets =
-            std::make_shared< std::vector< std::vector<int> > >(candidateSets);
+//    std::shared_ptr< std::vector< std::vector<int> > > pCandidateSets =
+//            std::make_shared< std::vector< std::vector<int> > >(candidateSets);
 
     // Read the camera pose file.
     Eigen::VectorXi camID;
@@ -152,19 +188,26 @@ int main(int argc, char* argv[]) {
 
     std::vector< CameraProjection<float> > camProj;
 
-    convert_from_quaternion_translation_table( camQuat, camPos, camK, camProj );
+    convert_from_quaternion_translation_table( camID, camQuat, camPos, camK, camProj );
 
-    // Test use.
-    std::cout << "camProj.size() = " << camProj.size() << std::endl;
-    std::cout << "camProj[ camProj.siz()-1 ].T = " << std::endl << camProj[ camProj.size()-1 ].T << std::endl;
-    std::cout << "camProj[ camProj.siz()-1 ].K = " << std::endl << camProj[ camProj.size()-1 ].K << std::endl;
+//    // Test use.
+//    std::cout << "camProj.size() = " << camProj.size() << std::endl;
+//    std::cout << "camProj[ camProj.siz()-1 ].T = " << std::endl << camProj[ camProj.size()-1 ].T << std::endl;
+//    std::cout << "camProj[ camProj.siz()-1 ].K = " << std::endl << camProj[ camProj.size()-1 ].K << std::endl;
 
     // Hole boundary projector.
     pcu::HoleBoundaryProjector<pcl::PointXYZRGB, float> hbp;
 
     std::vector< pcu::HoleBoundaryPoints<float> > holePolygonPoints;
 
-    hbp.process( pInput, pCandidateSets, pEquivalentNormals, camProj, holePolygonPoints );
+    hbp.process( pInCloud, candidateSets, pEquivalentNormals, camProj, holePolygonPoints );
+
+    test_directory(args.outDir);
+
+    {
+        std::string outFn = args.outDir + "/HolePolygonPoints.json";
+        write_hole_polygon_points_json(outFn, holePolygonPoints);
+    }
 
     return 0;
 }

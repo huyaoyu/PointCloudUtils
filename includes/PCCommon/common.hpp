@@ -32,6 +32,24 @@ float distance_two_points( const pT0& p0, const pT1& p1 ) {
 }
 
 template < typename iT >
+pcl::PointIndices::Ptr convert_vector_2_pcl_indices( const std::vector<iT> &v) {
+    const auto N = v.size();
+
+    if ( N == 0 ) {
+        std::stringstream ss;
+        ss << "Vector is empty. Cannot convert to pcl::PointIndices. ";
+        throw( std::runtime_error( ss.str() ) );
+    }
+
+    pcl::PointIndices::Ptr pclIndices (new pcl::PointIndices() );
+
+    pclIndices->indices.resize( N );
+    std::copy(v.begin(), v.end(), pclIndices->indices.begin() );
+
+    return pclIndices;
+}
+
+template < typename iT >
 void convert_vector_2_pcl_indices( const std::vector<iT>& v, pcl::PointIndices::Ptr& indices ) {
     const auto N = v.size();
 
