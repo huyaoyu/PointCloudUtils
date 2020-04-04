@@ -33,31 +33,31 @@ message(STATUS "YAML_CPP_LIBRARIES=${YAML_CPP_LIBRARIES}")
 include_directories(includes)
 
 set(EXE_DOWNSAMPLE DownSample)
-add_executable(${EXE_DOWNSAMPLE} src/DownSample.cpp)
+add_executable(${EXE_DOWNSAMPLE} src/Tools/DownSample.cpp)
 target_link_libraries(${EXE_DOWNSAMPLE} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
 set(EXE_MOVE_CENTER MoveCenter)
-add_executable(${EXE_MOVE_CENTER} src/MoveCenter.cpp)
+add_executable(${EXE_MOVE_CENTER} src/Tools/MoveCenter.cpp)
 target_link_libraries(${EXE_MOVE_CENTER} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
 set(EXE_SMOOTH_FILTER SmoothFilter)
-add_executable(${EXE_SMOOTH_FILTER} src/SmoothFilter.cpp)
+add_executable(${EXE_SMOOTH_FILTER} src/Tools/SmoothFilter.cpp)
 target_link_libraries(${EXE_SMOOTH_FILTER} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
 set(EXE_CROP_BBB CropByBBox)
-add_executable(${EXE_CROP_BBB} src/CropByBBox.cpp)
+add_executable(${EXE_CROP_BBB} src/Tools/CropByBBox.cpp)
 target_link_libraries(${EXE_CROP_BBB} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
 set(EXE_NORMAL_ESTIMATION NormalEstimation)
-add_executable(${EXE_NORMAL_ESTIMATION} src/NormalEstimation.cpp)
+add_executable(${EXE_NORMAL_ESTIMATION} src/Tools/NormalEstimation.cpp)
 target_link_libraries(${EXE_NORMAL_ESTIMATION} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
 set(EXE_CLUSTER_FILTER ClusterFilter)
-add_executable(${EXE_CLUSTER_FILTER} src/ClusterFilter.cpp)
+add_executable(${EXE_CLUSTER_FILTER} src/Tools/ClusterFilter.cpp)
 target_link_libraries(${EXE_CLUSTER_FILTER} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
 set(EXE_TRY_DISJOINT_SET TryDisjointSet)
-add_executable(${EXE_TRY_DISJOINT_SET} src/TryDisjointSet.cpp)
+add_executable(${EXE_TRY_DISJOINT_SET} src/Trials/TryDisjointSet.cpp)
 #target_link_libraries(${EXE_TRY_DISJOINT_SET} )
 
 set(EXE_HOLE_BOUNDARY_DETECTION HoleBoundaryDetection)
@@ -72,7 +72,7 @@ add_executable(${EXE_HOLE_BOUNDARY_DETECTION}
 target_link_libraries(${EXE_HOLE_BOUNDARY_DETECTION} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
 set(EXE_TRY_TRANSFORM_HELPERS TryTransformHelpers)
-add_executable(${EXE_TRY_TRANSFORM_HELPERS} includes/Geometry/TransformHelpers.hpp src/TryTransformHelpers.cpp)
+add_executable(${EXE_TRY_TRANSFORM_HELPERS} includes/Geometry/TransformHelpers.hpp src/Trials/TryTransformHelpers.cpp)
 target_link_libraries(${EXE_TRY_TRANSFORM_HELPERS} Eigen3::Eigen)
 
 set(EXE_CAM_GEOM_TRY_CSVIO CamGeom_TryCSVIO)
