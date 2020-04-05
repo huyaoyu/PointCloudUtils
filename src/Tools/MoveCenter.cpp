@@ -21,34 +21,12 @@
 #include <pcl/point_types.h>
 #include <pcl/filters/voxel_grid.h>
 
+#include "Args/Args.hpp"
+#include "Filesystem/Filesystem.hpp"
+
 // Namespaces.
 namespace bpo = boost::program_options;
 namespace bpt = boost::posix_time;
-
-std::vector<std::string> get_file_parts(const std::string& p) {
-    boost::filesystem::path pp{p};
-
-    std::vector<std::string> parts{
-        pp.parent_path().string(), pp.stem().string(), pp.extension().string()};
-
-    return parts;
-}
-
-/**
- * This function is copied from
- * https://www.boost.org/doc/libs/1_60_0/libs/program_options/example/options_description.cpp
- *
- * @tparam T
- * @param os
- * @param v
- * @return
- */
-template<class T>
-std::ostream& operator<<(std::ostream& os, const std::vector<T>& v)
-{
-    copy(v.begin(), v.end(), std::ostream_iterator<T>(os, " "));
-    return os;
-}
 
 typedef struct Args {
     std::string inFile;

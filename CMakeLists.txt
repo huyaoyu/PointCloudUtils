@@ -3,6 +3,8 @@ project(PointCloudUtils)
 
 set(CMAKE_CXX_STANDARD 14)
 
+# ========== Libraries and includes. ==========
+
 # Multi-thread.
 find_package(Threads REQUIRED)
 message(STATUS "Threads_FOUND=${Threads_FOUND}")
@@ -32,38 +34,88 @@ message(STATUS "YAML_CPP_LIBRARIES=${YAML_CPP_LIBRARIES}")
 
 include_directories(includes)
 
-set(EXE_DOWNSAMPLE DownSample)
-add_executable(${EXE_DOWNSAMPLE} src/Tools/DownSample.cpp)
-target_link_libraries(${EXE_DOWNSAMPLE} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
+# ========== Tools. ==========
 
-set(EXE_MOVE_CENTER MoveCenter)
-add_executable(${EXE_MOVE_CENTER} src/Tools/MoveCenter.cpp)
-target_link_libraries(${EXE_MOVE_CENTER} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
+set(EXE_TOOL_DOWNSAMPLE DownSample)
+add_executable(${EXE_TOOL_DOWNSAMPLE} src/Tools/DownSample.cpp)
+target_link_libraries(${EXE_TOOL_DOWNSAMPLE} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
-set(EXE_SMOOTH_FILTER SmoothFilter)
-add_executable(${EXE_SMOOTH_FILTER} src/Tools/SmoothFilter.cpp)
-target_link_libraries(${EXE_SMOOTH_FILTER} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
+set(EXE_TOOL_MOVE_CENTER MoveCenter)
+add_executable(${EXE_TOOL_MOVE_CENTER} src/Tools/MoveCenter.cpp)
+target_link_libraries(${EXE_TOOL_MOVE_CENTER} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
-set(EXE_CROP_BBB CropByBBox)
-add_executable(${EXE_CROP_BBB} src/Tools/CropByBBox.cpp)
-target_link_libraries(${EXE_CROP_BBB} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
+set(EXE_TOOL_SMOOTH_FILTER SmoothFilter)
+add_executable(${EXE_TOOL_SMOOTH_FILTER} src/Tools/SmoothFilter.cpp)
+target_link_libraries(${EXE_TOOL_SMOOTH_FILTER} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
-set(EXE_NORMAL_ESTIMATION NormalEstimation)
-add_executable(${EXE_NORMAL_ESTIMATION} src/Tools/NormalEstimation.cpp)
-target_link_libraries(${EXE_NORMAL_ESTIMATION} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
+set(EXE_TOOL_CROP_BBB CropByBBox)
+add_executable(${EXE_TOOL_CROP_BBB} src/Tools/CropByBBox.cpp)
+target_link_libraries(${EXE_TOOL_CROP_BBB} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
-set(EXE_CLUSTER_FILTER ClusterFilter)
-add_executable(${EXE_CLUSTER_FILTER} src/Tools/ClusterFilter.cpp)
-target_link_libraries(${EXE_CLUSTER_FILTER} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
+set(EXE_TOOL_NORMAL_ESTIMATION NormalEstimation)
+add_executable(${EXE_TOOL_NORMAL_ESTIMATION} src/Tools/NormalEstimation.cpp)
+target_link_libraries(${EXE_TOOL_NORMAL_ESTIMATION} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
+
+set(EXE_TOOL_CLUSTER_FILTER ClusterFilter)
+add_executable(${EXE_TOOL_CLUSTER_FILTER} src/Tools/ClusterFilter.cpp)
+target_link_libraries(${EXE_TOOL_CLUSTER_FILTER} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
 set(EXE_TOOL_SHADOW_CROP Tool_ShadowCrop)
 add_executable(${EXE_TOOL_SHADOW_CROP}
         src/Tools/ShadowCrop.cpp)
 target_link_libraries(${EXE_TOOL_SHADOW_CROP} Eigen3::Eigen ${PCL_LIBRARIES})
 
-set(EXE_TRY_DISJOINT_SET TryDisjointSet)
+set(EXE_TOOL_ICP Tool_ICP)
+add_executable(${EXE_TOOL_ICP}
+        src/Tools/ICP.cpp)
+target_link_libraries(${EXE_TOOL_ICP} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
+        Eigen3::Eigen ${PCL_LIBRARIES})
+
+# ========== Trials. ==========
+
+set(EXE_TRY_DISJOINT_SET Trial_TryDisjointSet)
 add_executable(${EXE_TRY_DISJOINT_SET} src/Trials/TryDisjointSet.cpp)
-#target_link_libraries(${EXE_TRY_DISJOINT_SET} )
+target_link_libraries(${EXE_TRY_DISJOINT_SET} )
+
+set(EXE_TRY_TRANSFORM_HELPERS Trial_TryTransformHelpers)
+add_executable(${EXE_TRY_TRANSFORM_HELPERS} includes/Geometry/TransformHelpers.hpp src/Trials/TryTransformHelpers.cpp)
+target_link_libraries(${EXE_TRY_TRANSFORM_HELPERS} Eigen3::Eigen)
+
+set(EXE_CAM_GEOM_TRY_CSVIO Trial_CamGeomTryCSVIO)
+add_executable(${EXE_CAM_GEOM_TRY_CSVIO}
+        includes/CameraGeometry/IO.hpp
+        includes/PCCommon/IO.hpp
+        src/CameraGeometry/TryCSVIO.cpp)
+target_link_libraries(${EXE_CAM_GEOM_TRY_CSVIO} Threads::Threads Eigen3::Eigen ${PCL_LIBRARIES})
+
+set(EXE_CAM_GEOM_TRY_READ_MATRIX Trial_CamGeomTryReadCameraMatrix)
+add_executable(${EXE_CAM_GEOM_TRY_READ_MATRIX}
+        includes/DataInterfaces/Plain/Matrix.hpp
+        src/CameraGeometry/TryReadCameraMatrix.cpp)
+target_link_libraries(${EXE_CAM_GEOM_TRY_READ_MATRIX} Eigen3::Eigen)
+
+set(EXE_CAMERA_GEOMETRY_TRY_EIGEN_QUATERNION Trial_CamGeomTryEigenQuaternion)
+add_executable(${EXE_CAMERA_GEOMETRY_TRY_EIGEN_QUATERNION}
+        src/CameraGeometry/TryEigenQuaternion.cpp)
+target_link_libraries(${EXE_CAMERA_GEOMETRY_TRY_EIGEN_QUATERNION} Eigen3::Eigen)
+
+set(EXE_YAML_TRY_YAML_CPP Trial_YAMLTryYamlCpp)
+add_executable(${EXE_YAML_TRY_YAML_CPP}
+        src/YAML/TryYamlCpp.cpp)
+target_link_libraries(${EXE_YAML_TRY_YAML_CPP} Eigen3::Eigen yaml-cpp)
+
+set(EXE_JSON_TRY_JSON Trial_JSONTryJSON)
+add_executable(${EXE_JSON_TRY_JSON}
+        src/JSON/TryJSON.cpp
+        src/HoleBoundaryDetection/HoleBoundaryDetector.cpp)
+target_link_libraries(${EXE_JSON_TRY_JSON} Eigen3::Eigen ${PCL_LIBRARIES})
+
+set(EXE_TRIAL_TRY_EIGEN Trail_TryEigen)
+add_executable(${EXE_TRIAL_TRY_EIGEN}
+        src/Trials/TryEigen.cpp)
+target_link_libraries(${EXE_TRIAL_TRY_EIGEN} Eigen3::Eigen ${PCL_LIBRARIES})
+
+# ========== Applications. ==========
 
 set(EXE_HOLE_BOUNDARY_DETECTION HoleBoundaryDetection)
 add_executable(${EXE_HOLE_BOUNDARY_DETECTION}
@@ -75,34 +127,6 @@ add_executable(${EXE_HOLE_BOUNDARY_DETECTION}
         src/HoleBoundaryDetection/HoleBoundaryDetector.cpp includes/HoleBoundaryDetection/HoleBoundaryDetector.hpp
         src/HoleBoundaryDetection/HoleBoundaryDetection.cpp)
 target_link_libraries(${EXE_HOLE_BOUNDARY_DETECTION} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
-
-set(EXE_TRY_TRANSFORM_HELPERS TryTransformHelpers)
-add_executable(${EXE_TRY_TRANSFORM_HELPERS} includes/Geometry/TransformHelpers.hpp src/Trials/TryTransformHelpers.cpp)
-target_link_libraries(${EXE_TRY_TRANSFORM_HELPERS} Eigen3::Eigen)
-
-set(EXE_CAM_GEOM_TRY_CSVIO CamGeom_TryCSVIO)
-add_executable(${EXE_CAM_GEOM_TRY_CSVIO}
-        includes/CameraGeometry/IO.hpp
-        includes/PCCommon/IO.hpp
-        src/CameraGeometry/TryCSVIO.cpp)
-target_link_libraries(${EXE_CAM_GEOM_TRY_CSVIO} Threads::Threads Eigen3::Eigen ${PCL_LIBRARIES})
-
-set(EXE_CAM_GEOM_TRY_READ_MATRIX CamGeom_TryReadCameraMatrix)
-add_executable(${EXE_CAM_GEOM_TRY_READ_MATRIX}
-        includes/DataInterfaces/Plain/Matrix.hpp
-        src/CameraGeometry/TryReadCameraMatrix.cpp)
-target_link_libraries(${EXE_CAM_GEOM_TRY_READ_MATRIX} Eigen3::Eigen)
-
-set(EXE_YAML_TRY_YAML_CPP YAML_TryYamlCpp)
-add_executable(${EXE_YAML_TRY_YAML_CPP}
-        src/YAML/TryYamlCpp.cpp)
-target_link_libraries(${EXE_YAML_TRY_YAML_CPP} Eigen3::Eigen yaml-cpp)
-
-set(EXE_JSON_TRY_JSON JSON_TryJSON)
-add_executable(${EXE_JSON_TRY_JSON}
-        src/JSON/TryJSON.cpp
-        src/HoleBoundaryDetection/HoleBoundaryDetector.cpp)
-target_link_libraries(${EXE_JSON_TRY_JSON} Eigen3::Eigen ${PCL_LIBRARIES})
 
 set(EXE_HOLE_BOUNDARY_PROJECTION HoleBoundaryProjection)
 add_executable(${EXE_HOLE_BOUNDARY_PROJECTION}
@@ -116,13 +140,3 @@ set(EXE_HOLE_BOUNDARY_SAVE_POLYGON_COOR HoleBoundarySavePolygonCoor)
 add_executable(${EXE_HOLE_BOUNDARY_SAVE_POLYGON_COOR}
         src/HoleBoundaryDetection/SavePolygonCoordinates.cpp)
 target_link_libraries(${EXE_HOLE_BOUNDARY_SAVE_POLYGON_COOR} Eigen3::Eigen ${PCL_LIBRARIES})
-
-set(EXE_CAMERA_GEOMETRY_TRY_EIGEN_QUATERNION CamGeom_TryEigenQuaternion)
-add_executable(${EXE_CAMERA_GEOMETRY_TRY_EIGEN_QUATERNION}
-        src/CameraGeometry/TryEigenQuaternion.cpp)
-target_link_libraries(${EXE_CAMERA_GEOMETRY_TRY_EIGEN_QUATERNION} Eigen3::Eigen)
-
-set(EXE_TRIAL_TRY_EIGEN Trail_TryEigen)
-add_executable(${EXE_TRIAL_TRY_EIGEN}
-        src/Trials/TryEigen.cpp)
-target_link_libraries(${EXE_TRIAL_TRY_EIGEN} Eigen3::Eigen ${PCL_LIBRARIES})

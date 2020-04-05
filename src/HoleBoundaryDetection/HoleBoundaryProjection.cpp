@@ -13,6 +13,7 @@
 #include <pcl/common/projection_matrix.h>
 #include <pcl/point_types.h>
 
+#include "Args/Args.hpp"
 #include "CameraGeometry/CameraPose2PCL.hpp"
 #include "CameraGeometry/IO.hpp"
 #include "DataInterfaces/Plain/Matrix.hpp"
@@ -23,22 +24,6 @@
 
 // Namespaces.
 namespace bpo = boost::program_options;
-
-/**
- * This function is copied from
- * https://www.boost.org/doc/libs/1_60_0/libs/program_options/example/options_description.cpp
- *
- * @tparam T
- * @param os
- * @param v
- * @return
- */
-template<class T>
-std::ostream& operator<<(std::ostream& os, const std::vector<T>& v)
-{
-    copy(v.begin(), v.end(), std::ostream_iterator<T>(os, " "));
-    return os;
-}
 
 class Args
 {

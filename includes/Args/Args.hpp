@@ -5,11 +5,28 @@
 #ifndef POINTCLOUDUTILS_ARGS_HPP
 #define POINTCLOUDUTILS_ARGS_HPP
 
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
 
 #include <boost/algorithm/string.hpp>
+
+/**
+ * This function is copied from
+ * https://www.boost.org/doc/libs/1_60_0/libs/program_options/example/options_description.cpp
+ *
+ * @tparam T
+ * @param os
+ * @param v
+ * @return
+ */
+template<class T>
+std::ostream& operator<<(std::ostream& os, const std::vector<T>& v)
+{
+    copy(v.begin(), v.end(), std::ostream_iterator<T>(os, " "));
+    return os;
+}
 
 template <typename T>
 void show_numeric_vector(const std::vector<T>& v, const std::string& delimiter=",") {
