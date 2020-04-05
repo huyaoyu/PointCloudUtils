@@ -56,6 +56,11 @@ set(EXE_CLUSTER_FILTER ClusterFilter)
 add_executable(${EXE_CLUSTER_FILTER} src/Tools/ClusterFilter.cpp)
 target_link_libraries(${EXE_CLUSTER_FILTER} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
+set(EXE_TOOL_SHADOW_CROP Tool_ShadowCrop)
+add_executable(${EXE_TOOL_SHADOW_CROP}
+        src/Tools/ShadowCrop.cpp)
+target_link_libraries(${EXE_TOOL_SHADOW_CROP} Eigen3::Eigen ${PCL_LIBRARIES})
+
 set(EXE_TRY_DISJOINT_SET TryDisjointSet)
 add_executable(${EXE_TRY_DISJOINT_SET} src/Trials/TryDisjointSet.cpp)
 #target_link_libraries(${EXE_TRY_DISJOINT_SET} )
@@ -116,3 +121,8 @@ set(EXE_CAMERA_GEOMETRY_TRY_EIGEN_QUATERNION CamGeom_TryEigenQuaternion)
 add_executable(${EXE_CAMERA_GEOMETRY_TRY_EIGEN_QUATERNION}
         src/CameraGeometry/TryEigenQuaternion.cpp)
 target_link_libraries(${EXE_CAMERA_GEOMETRY_TRY_EIGEN_QUATERNION} Eigen3::Eigen)
+
+set(EXE_TRIAL_TRY_EIGEN Trail_TryEigen)
+add_executable(${EXE_TRIAL_TRY_EIGEN}
+        src/Trials/TryEigen.cpp)
+target_link_libraries(${EXE_TRIAL_TRY_EIGEN} Eigen3::Eigen ${PCL_LIBRARIES})

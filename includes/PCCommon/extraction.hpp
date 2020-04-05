@@ -5,9 +5,11 @@
 #ifndef POINTCLOUDUTILS_EXTRACTION_HPP
 #define POINTCLOUDUTILS_EXTRACTION_HPP
 
-#include "PCCommon/common.hpp"
-
 #include <pcl/filters/extract_indices.h>
+#include <pcl/filters/crop_box.h>
+
+#include "PCCommon/common.hpp"
+#include "Profiling/SimpleTime.hpp"
 
 namespace pcu
 {
@@ -30,6 +32,33 @@ void extract_points( const typename pcl::PointCloud<pT>::Ptr pInput,
     pcl::PointIndices::Ptr pclIndices = convert_vector_2_pcl_indices( indices );
 
     extract_points<pT>( pInput, pOutput, pclIndices );
+}
+
+template <typename T>
+typename pcl::PointCloud<T>::Ptr crop_by_CropBox(
+        const typename pcl::PointCloud<T>::Ptr inCloud,
+        const pcl::PointXYZ &minPoint,
+        const pcl::PointXYZ &maxPoint )
+{
+    QUICK_TIME_START(te)
+
+    Eigen::Vector4f p0 = pcu::create_eigen_vector4_from_xyz<T, float>(minPoint);
+    Eigen::Vector4f p1 = pcu::create_eigen_vector4_from_xyz<T, float>(maxPoint);
+
+    typename pcl::PointCloud<T>::Ptr pOutCloud ( new pcl::PointCloud<T> );
+
+    pcl::CropBox<T> pass;
+    pass.setMin( p0 );
+    pass.setMax( p1 );
+    pass.setInputCloud(inCloud);
+    pass.filter(*pOutCloud);
+
+    QUICK_TIME_END(te)
+
+    std::cout << "Cropped " << pOutCloud->size() << " points. " << std::endl;
+    std::cout << "Crop in " << te << "ms. " << std::endl;
+
+    return pOutCloud;
 }
 
 } // namespace pcu.
