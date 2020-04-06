@@ -140,3 +140,10 @@ set(EXE_HOLE_BOUNDARY_SAVE_POLYGON_COOR HoleBoundarySavePolygonCoor)
 add_executable(${EXE_HOLE_BOUNDARY_SAVE_POLYGON_COOR}
         src/HoleBoundaryDetection/SavePolygonCoordinates.cpp)
 target_link_libraries(${EXE_HOLE_BOUNDARY_SAVE_POLYGON_COOR} Eigen3::Eigen ${PCL_LIBRARIES})
+
+set(EXE_HOLE_BOUNDARY_DENSITY_MAP HoleBoundaryDensityMap)
+add_executable(${EXE_HOLE_BOUNDARY_DENSITY_MAP}
+        src/HoleBoundaryDetection/DensityMap.cpp)
+target_link_libraries(${EXE_HOLE_BOUNDARY_DENSITY_MAP}
+        ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
+        Eigen3::Eigen ${PCL_LIBRARIES})

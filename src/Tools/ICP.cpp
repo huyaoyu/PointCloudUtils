@@ -55,7 +55,7 @@ public:
 
 const std::string Args::AS_TGT = "tgt";
 const std::string Args::AS_SRC = "src";
-const std::string Args::AS_OUT = "outdir";
+const std::string Args::AS_OUT = "outfile";
 
 static void parse_args(int argc, char* argv[], Args& args) {
 
