@@ -38,6 +38,42 @@ public:
     void write_json_content( std::ofstream &ofs,
         const std::string& indent, int baseIndentNum ) const;
 
+    friend std::ostream& operator << ( std::ostream &out, const HoleBoundaryPoints<rT> & hbp ) {
+        out << "{" << std::endl;
+        out << "\"id\": " << hbp.id << "," << std::endl;
+        out << "\"centroid\": [ "
+            << hbp.equivalentNormal.x << ", "
+            << hbp.equivalentNormal.y << ", "
+            << hbp.equivalentNormal.z << " ]," << std::endl;
+        out << "\"normal\": [ "
+            << hbp.equivalentNormal.normal_x << ", "
+            << hbp.equivalentNormal.normal_y << ", "
+            << hbp.equivalentNormal.normal_z << " ]," << std::endl;
+        out << "\"curvature\": " << hbp.equivalentNormal.curvature << "," << std::endl;
+        out << "\"polygonIndices\": [ ";
+
+        const int lineBreak = 10;
+        const int nPI = hbp.polygonIndices.size();
+        for ( int i = 0; i < nPI; ++i ) {
+            if ( i == nPI - 1 ) {
+                out << hbp.polygonIndices[i] << " ]," << std::endl;
+                break;
+            }
+
+            out << hbp.polygonIndices[i] << ", ";
+
+            if ( (i+1) % lineBreak == 0 && i != 0 ) {
+                out << std::endl;
+            }
+        }
+
+        out << "\"camProj\": ";
+
+        out << hbp.camProj << std::endl;
+
+        out << std::endl << "}";
+    }
+
 public:
     int id;
     std::vector<int> polygonIndices;

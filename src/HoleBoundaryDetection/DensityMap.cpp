@@ -52,7 +52,7 @@ public:
 public:
     std::string inMVS; // The target point cloud.
     std::string inLiDAR; // The reference point cloud.
-    std::string outFile; // The output directory.
+    std::string outFile; // The output file.
     float radius; // The search radius of the kd-tree.
 };
 

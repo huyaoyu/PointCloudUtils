@@ -99,6 +99,32 @@ public:
 
     void write_json_content( std::ofstream &ofs, const std::string& indent, int baseIndentNum ) const;
 
+    friend std::ostream& operator << ( std::ostream &out, const CameraProjection<rT> & cp ) {
+        out << "{" << std::endl;
+        out << "\"id\": " << cp.id << "," << std::endl;
+        out << "\"height\": " << cp.height << "," << std::endl;
+        out << "\"width\": " << cp.width << "," << std::endl;
+        out << "\"K\": [ "
+            << cp.K(0, 0) << ", " << cp.K(0, 1) << ", " << cp.K(0, 2) << ", " << std::endl
+            << cp.K(1, 0) << ", " << cp.K(1, 1) << ", " << cp.K(1, 2) << ", " << std::endl
+            << cp.K(2, 0) << ", " << cp.K(2, 1) << ", " << cp.K(2, 2) << " ]," << std::endl;
+        out << "\"RC\": [ "
+            << cp.RC(0, 0) << ", " << cp.RC(0, 1) << ", " << cp.RC(0, 2) << ", " << std::endl
+            << cp.RC(1, 0) << ", " << cp.RC(1, 1) << ", " << cp.RC(1, 2) << ", " << std::endl
+            << cp.RC(2, 0) << ", " << cp.RC(2, 1) << ", " << cp.RC(2, 2) << " ]," << std::endl;
+        out << "\"R\": [ "
+            << cp.R(0, 0) << ", " << cp.R(0, 1) << ", " << cp.R(0, 2) << ", " << std::endl
+            << cp.R(1, 0) << ", " << cp.R(1, 1) << ", " << cp.R(1, 2) << ", " << std::endl
+            << cp.R(2, 0) << ", " << cp.R(2, 1) << ", " << cp.R(2, 2) << " ]," << std::endl;
+        out << "\"T\": [ "
+            << cp.T(0) << ", " << cp.T(1) << ", " << cp.T(2) << " ]," << std::endl;
+        out << "\"Q\": [ "
+            << cp.Q.w() << ", " << cp.Q.x() << ", " << cp.Q.y() << ", " << cp.Q.z() << " ]" << std::endl;
+        out << "}";
+
+        return out;
+    }
+
 public:
     Eigen::Matrix3<rT> K;
     Eigen::Matrix3<rT> RC;

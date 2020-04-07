@@ -147,3 +147,10 @@ add_executable(${EXE_HOLE_BOUNDARY_DENSITY_MAP}
 target_link_libraries(${EXE_HOLE_BOUNDARY_DENSITY_MAP}
         ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
         Eigen3::Eigen ${PCL_LIBRARIES})
+
+set(EXE_HOLE_BOUNDARY_DEPTH_COMPLETION_DATA HoleDepthCompDataGen)
+add_executable(${EXE_HOLE_BOUNDARY_DEPTH_COMPLETION_DATA}
+        src/HoleBoundaryDetection/HoleDepthCompletionDataGeneration.cpp)
+target_link_libraries(${EXE_HOLE_BOUNDARY_DEPTH_COMPLETION_DATA}
+        ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
+        Eigen3::Eigen ${PCL_LIBRARIES})
