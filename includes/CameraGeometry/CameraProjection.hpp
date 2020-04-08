@@ -59,6 +59,8 @@ public:
         return *this;
     }
 
+    void scale_intrinsics(rT s);
+
     void set_rotation_by_quaternion( const Eigen::Quaternion<rT> &q );
 
     void get_center( rT &x, rT &y, rT &z ) const;
@@ -140,6 +142,16 @@ public:
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
+
+template < typename rT >
+void CameraProjection<rT>::scale_intrinsics(rT s) {
+    assert( s > 0 );
+
+    height = static_cast<int>( s * height );
+    width  = static_cast<int>( s * width );
+
+    K *= s;
+}
 
 template < typename rT >
 void CameraProjection<rT>::set_rotation_by_quaternion( const Eigen::Quaternion<rT> &q ) {

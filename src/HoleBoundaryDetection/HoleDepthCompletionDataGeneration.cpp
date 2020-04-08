@@ -3,6 +3,7 @@
 //
 
 #include <algorithm>
+#include <cmath>
 #include <exception>
 #include <fstream>
 #include <iostream>
@@ -17,10 +18,15 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 
+#include <opencv2/opencv.hpp>
+
 #include "Args/Args.hpp"
+#include "CVCommon/All.hpp"
 #include "DataInterfaces/JSON/single_include/nlohmann/json.hpp"
 #include "Filesystem/Filesystem.hpp"
 #include "HoleBoundaryDetection/HoleBoundaryProjector.hpp"
+#include "PCCommon/common.hpp"
+#include "PCCommon/extraction.hpp"
 #include "PCCommon/IO.hpp"
 
 // Namespaces.
@@ -76,6 +82,11 @@ public:
             std::cout << "Currently only support single hole processing. " << std::endl;
         }
 
+        if ( camScale <= 0 ) {
+            flag = false;
+            std::cout << "Camera intrinsic scale must be positive. " << camScale << " is specified. " << std::endl;
+        }
+
         return flag;
     }
 
@@ -86,6 +97,7 @@ public:
         out << Args::AS_IN_HOLE_PROJ << ": " << args.inHoleProj << std::endl;
         out << Args::AS_HOLE_ID << ": " << args.holeID << std::endl;
         out << Args::AS_OUR_DIR << ": " << args.outDir << std::endl;
+        out << Args::AS_CAM_SCALE << ": " << args.camScale << std::endl;
 
         return out;
     }
@@ -97,6 +109,7 @@ public:
     static const std::string AS_IN_HOLE_PROJ;
     static const std::string AS_HOLE_ID;
     static const std::string AS_OUR_DIR;
+    static const std::string AS_CAM_SCALE;
 
 public:
     std::string inMVSOriginal; // The MVS point cloud on which we will be perform hole depth completion.
@@ -105,6 +118,7 @@ public:
     std::string inHoleProj; // The JSON file that records the hole projections.
     int holeID; // The hole id to process.
     std::string outDir; // The output directory.
+    float camScale; // The scale of the camera intrinsics.
 };
 
 const std::string Args::AS_IN_MVS_O = "inMVSOriginal";
@@ -113,6 +127,7 @@ const std::string Args::AS_IN_LIDAR = "inLiDAR";
 const std::string Args::AS_IN_HOLE_PROJ = "inHoleProj";
 const std::string Args::AS_HOLE_ID = "holeID";
 const std::string Args::AS_OUR_DIR = "outDir";
+const std::string Args::AS_CAM_SCALE = "cam-scale";
 
 static void parse_args(int argc, char* argv[], Args& args) {
 
@@ -127,7 +142,8 @@ static void parse_args(int argc, char* argv[], Args& args) {
                 (Args::AS_IN_LIDAR.c_str(), bpo::value< std::string >(&args.inLiDAR)->required(), "The input LiDAR point cloud.")
                 (Args::AS_IN_HOLE_PROJ.c_str(), bpo::value< std::string >(&args.inHoleProj)->required(), "The input JSON file that records the hole projection.")
                 (Args::AS_HOLE_ID.c_str(), bpo::value< int >(&args.holeID)->default_value(-1), "The single hole ID that needs to be processed. Use -1 of leave unset to process all hole IDs." )
-                (Args::AS_OUR_DIR.c_str(), bpo::value< std::string >(&args.outDir)->required(), "The output file.");
+                (Args::AS_OUR_DIR.c_str(), bpo::value< std::string >(&args.outDir)->required(), "The output file.")
+                (Args::AS_CAM_SCALE.c_str(), bpo::value< float >(&args.camScale)->default_value(1.0f), "The scale of the camera intrinsics. Positive floating point number.");
 
         bpo::positional_options_description posOptDesc;
         posOptDesc.add(Args::AS_IN_MVS_O.c_str(), 1
@@ -257,6 +273,161 @@ static std::shared_ptr< pcu::HoleBoundaryPoints<rT> > find_boundary_polygon(
     return pHBP;
 }
 
+template < typename pT, typename rT >
+static void project_pcl_points_2_pixel_plane(
+        const typename pcl::PointCloud<pT>::Ptr pInput,
+        const CameraProjection<rT> &camProj,
+        Eigen::MatrixX<rT> &pixels ) {
+
+    const std::size_t N = pInput->size();
+    assert(N > 0);
+
+    pixels.resize(3, N);
+//    pixels = Eigen::Matrix<rT, 3, N>::Ones();
+
+    for ( std::size_t i = 0; i < N; ++i ) {
+        const auto& point = pInput->at(i);
+
+        Eigen::Vector3<rT> wp;
+        wp << point.x, point.y, point.z;
+
+        Eigen::Vector3<rT> pixel = Eigen::Vector3<rT>::Ones();
+        camProj.world_2_pixel(wp, pixel);
+
+        pixels.col(i) = pixel;
+    }
+}
+
+/**
+ * Find the 2D bounding box parallel to the axes in the pixel plane.
+ * @tparam rT A floating point type.
+ * @param pixels The matrix stores the pixels coordinates. 3xn matrix, the last row should be all 1.0.
+ * @param x0 X coordinate of the upper-left corner of the bounding box.
+ * @param y0 Y coordinate of the upper-left corner of the bounding box.
+ * @param x1 X coordinate of the lower-right corner of the bounding box.
+ * @param y1 Y coordinate of the lower-right corner of the bounding box.
+ */
+template < typename rT >
+static void find_bounding_box_pixel_plane( const Eigen::MatrixX<rT> &pixels,
+        rT &x0, rT &y0, rT &x1, rT &y1 ) {
+    const std::size_t N = pixels.cols();
+
+    assert( N > 0 );
+
+    x0 = pixels(0,0);
+    y0 = pixels(1,0);
+    x1 = x0;
+    y1 = y0;
+
+    rT x, y;
+
+    for ( std::size_t i = 0; i < N; ++i ) {
+        x = pixels(0, i);
+        y = pixels(1, i);
+
+        if ( x < x0 ) {
+            x0 = x;
+        } else if ( x > x1 ) {
+            x1 = x;
+        }
+
+        if ( y < y0 ) {
+            y0 = y;
+        } else if ( y > y1 ) {
+            y1 = y;
+        }
+    }
+}
+
+template < typename pT, typename rT >
+static void make_depth_map(
+        const typename pcl::PointCloud<pT>::Ptr pInput,
+        const CameraProjection<rT> &camProj,
+        Eigen::MatrixX<rT> &depth ) {
+    QUICK_TIME_START(te)
+
+    // Save all the points to an Eigen matrix.
+    Eigen::MatrixX<rT> points;
+    pcu::convert_pcl_2_eigen_matrix<pT, rT>( pInput, points );
+
+    // Transform all the points into the camera(sensor) frame.
+    Eigen::MatrixX<rT> cp =
+            camProj.RC.transpose() * camProj.R.transpose() * ( points.colwise() - camProj.T );
+
+    // Find all the points that have positive z-coordinate.
+    const std::size_t cpRows = cp.rows();
+    const std::size_t cpCols = cp.cols();
+    Eigen::MatrixX<rT> cpz( cpRows, cpCols );
+
+    std::size_t count = 0;
+
+    for ( std::size_t j = 0; j < cpCols; ++j ) {
+        if ( cp(2, j) <= 0 ) {
+            continue;
+        }
+
+        cpz( Eigen::all, count) = cp( Eigen::all, j );
+        count++;
+    }
+
+    // Test use.
+    std::cout << count << " points transformed to the positive-z positions. " << std::endl;
+
+    // Copy to an Eigen matrix with the right dimension.
+    Eigen::MatrixX<rT> cpp = cpz( Eigen::all, Eigen::seq(0, count-1) );
+
+    // Test use.
+    Eigen::MatrixX<rT> wp = ( camProj.R * camProj.RC * cpp ).colwise() + camProj.T;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr pWP =
+            pcu::convert_eigen_matrix_2_pcl_xyz<rT>( wp );
+    pcu::write_point_cloud<pcl::PointXYZ>("./WP.ply", pWP);
+
+    // Project cpp to the pixel plane.
+    Eigen::MatrixX<rT> pixels = camProj.K * cpp;
+    pixels = ( pixels.array().rowwise() / pixels(2, Eigen::all).array().eval() ).matrix();
+
+    // Test use.
+    pcl::PointCloud<pcl::PointXYZ>::Ptr pPixels =
+            pcu::convert_eigen_matrix_2_pcl_xyz<rT>( pixels );
+    pcu::write_point_cloud<pcl::PointXYZ>("./Pixels.ply", pPixels);
+
+    // Create the depth map.
+    depth.resize( camProj.height, camProj.width );
+    depth = Eigen::MatrixX<rT>::Constant(camProj.height, camProj.width, static_cast<rT>(-1.0));
+
+    // Loop all the points in cpp;
+    const std::size_t N = cpp.cols();
+    std::size_t countDepth = 0;
+    for ( std::size_t i = 0; i < N; ++i ) {
+        const int x = static_cast<int>( std::round( pixels(0, i) ) );
+        const int y = static_cast<int>( std::round( pixels(1, i) ) );
+
+        if ( x < 0 || x >= camProj.width ||
+             y < 0 || y >= camProj.height ) {
+            continue;
+        }
+
+        const rT dInMap = depth(y, x);
+        const rT d = cpp(2, i);
+
+        if ( dInMap < 0 || d < dInMap ) {
+            depth(y, x) = d;
+            countDepth++;
+        }
+    }
+
+    std::cout << countDepth << " depth point projected to the pixel plane. " << std::endl;
+
+    // Test use.
+    pcl::PointCloud<pcl::PointXYZ>::Ptr pDepth =
+            pcu::convert_eigen_depth_img_2_pcl_xyz<rT>( depth );
+    pcu::write_point_cloud<pcl::PointXYZ>("./Depth.ply", pDepth);
+
+    QUICK_TIME_END(te)
+
+    std::cout << "Make depth map in " << te << " ms. " << std::endl;
+}
+
 int main( int argc, char* argv[] ) {
     std::cout << "Hello, HoleDepthCompletionDataGeneration! " << std::endl;
 
@@ -266,6 +437,9 @@ int main( int argc, char* argv[] ) {
 
     std::cout << "args: " << std::endl;
     std::cout << args << std::endl;
+
+    // Test the output directory.
+    test_directory(args.outDir);
 
     // Read the hole boundary projection/polygon JSON file,
     // find and create a HoleBoundaryPoints object according to the specified ID.
@@ -284,9 +458,46 @@ int main( int argc, char* argv[] ) {
         return 1;
     }
 
+    // Scale the camera intrinsics.
+    pHBP->camProj.scale_intrinsics(args.camScale);
+
     // Test use.
     std::cout << "pHBP: " << std::endl;
     std::cout << *pHBP << std::endl;
+
+    // Load MVSB.
+    pcl::PointCloud<pcl::PointXYZ>::Ptr pMVSB =
+            pcu::read_point_cloud<pcl::PointXYZ>( args.inMVSBoundary );
+
+    // Extract the boundary points.
+    pcl::PointCloud<pcl::PointXYZ>::Ptr pBoundary =
+            pcu::extract_points<pcl::PointXYZ, int>( pMVSB, pHBP->polygonIndices );
+
+    // Project the boundary points to the 2D pixel plane.
+    Eigen::MatrixXf boundaryPixels;
+    project_pcl_points_2_pixel_plane<pcl::PointXYZ, float>(
+            pBoundary, pHBP->camProj, boundaryPixels );
+
+    // Find the 2D bounding box in the pixel plane.
+    float bx0, by0, bx1, by1;
+    find_bounding_box_pixel_plane( boundaryPixels, bx0, by0, bx1, by1 );
+
+    // Test use.
+    std::cout << "Pixel bounding box coordinates: "
+              << "( " << bx0 << ", " << by0 << " ), "
+              << "( " << bx1 << ", " << by1 << " ). " << std::endl;
+
+    // Load MVSO.
+    pcl::PointCloud<pcl::PointXYZ>::Ptr pMVSO =
+            pcu::read_point_cloud<pcl::PointXYZ>( args.inMVSOriginal );
+
+    // Make a depth map for the MVSO.
+    Eigen::MatrixXf depthOriginal;
+    make_depth_map<pcl::PointXYZ, float>( pMVSO, pHBP->camProj, depthOriginal );
+
+    // Save the matrix as a float image.
+    std::string mvsoDepthImgFn = args.outDir + "/MVSODepthImg.png";
+    write_eigen_matrixXf_2_image( mvsoDepthImgFn, depthOriginal, 0.0f, 1.0f );
 
     return 0;
 }

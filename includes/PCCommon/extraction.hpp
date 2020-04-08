@@ -26,6 +26,18 @@ void extract_points( const typename pcl::PointCloud<pT>::Ptr pInput,
 }
 
 template < typename pT, typename iT >
+typename pcl::PointCloud<pT>::Ptr extract_points( const typename pcl::PointCloud<pT>::Ptr pInput,
+                     const std::vector<iT>& indices ) {
+    typename pcl::PointCloud<pT>::Ptr pOutput ( new pcl::PointCloud<pT> );
+
+    pcl::PointIndices::Ptr pclIndices = convert_vector_2_pcl_indices( indices );
+
+    extract_points<pT>( pInput, pOutput, pclIndices );
+
+    return pOutput;
+}
+
+template < typename pT, typename iT >
 void extract_points( const typename pcl::PointCloud<pT>::Ptr pInput,
                             typename pcl::PointCloud<pT>::Ptr pOutput,
                             const std::vector<iT>& indices ) {

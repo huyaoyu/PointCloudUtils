@@ -23,6 +23,75 @@ namespace pcu
 {
 
 template < typename pT, typename rT >
+void convert_pcl_2_eigen_matrix(
+        const typename pcl::PointCloud<pT>::Ptr pInput,
+        Eigen::MatrixX<rT> &points ) {
+    const std::size_t N = pInput->size();
+    assert(N > 0);
+
+    points.resize(3, N);
+    for ( std::size_t i = 0; i < N; ++i) {
+        const auto& point = pInput->at(i);
+        points(0, i) = point.x;
+        points(1, i) = point.y;
+        points(2, i) = point.z;
+    }
+}
+
+template < typename rT >
+pcl::PointCloud<pcl::PointXYZ>::Ptr convert_eigen_matrix_2_pcl_xyz(
+        const Eigen::MatrixX<rT> &mat ) {
+    const std::size_t N = mat.cols();
+
+    assert( N > 0 );
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr pOutput ( new pcl::PointCloud<pcl::PointXYZ> );
+    pOutput->resize( N );
+
+    for ( std::size_t i = 0; i < N; ++i ) {
+        pcl::PointXYZ p;
+        p.x = mat(0, i);
+        p.y = mat(1, i);
+        p.z = mat(2, i);
+        pOutput->at(i) = p;
+    }
+
+    return pOutput;
+}
+
+template < typename rT >
+pcl::PointCloud<pcl::PointXYZ>::Ptr convert_eigen_depth_img_2_pcl_xyz(
+        const Eigen::MatrixX<rT> &img ) {
+    const std::size_t height = img.rows();
+    const std::size_t width  = img.cols();
+
+    assert( height > 0 );
+    assert( width  > 0 );
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr pOutput ( new pcl::PointCloud<pcl::PointXYZ> );
+    pOutput->clear();
+
+    std::size_t count = 0;
+
+    for ( std::size_t i = 0; i < height; ++i ) {
+        for ( std::size_t j = 0; j < width; ++j ) {
+            if ( img(i, j) <= 0 ) {
+                continue;
+            }
+
+            pcl::PointXYZ p;
+            p.x = j;
+            p.y = i;
+            p.z = img(i, j);
+            pOutput->push_back(p);
+            count++;
+        }
+    }
+
+    return pOutput;
+}
+
+template < typename pT, typename rT >
 Eigen::Vector3<rT> create_eigen_vector3_from_xyz(const pT &point) {
     EIGEN_ALIGN16 Eigen::Vector3<rT> v;
     v << point.x, point.y, point.z;

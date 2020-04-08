@@ -35,5 +35,11 @@ int main( int argc, char* argv[] ) {
 
     SHOW_MATRIX(transMat)
 
+    Eigen::MatrixXf pointMat = Eigen::MatrixXf::Random(3, 5);
+    SHOW_MATRIX(pointMat)
+
+    Eigen::MatrixXf transPoint = pointMat.colwise() - Eigen::Vector3f::Ones();
+    SHOW_MATRIX(transPoint)
+
     return 0;
 }

@@ -26,6 +26,12 @@ message(STATUS "PCL_INCLUDE_DIRS=${PCL_INCLUDE_DIRS}")
 message(STATUS "PCL_LIBRARY_DIRS=${PCL_LIBRARY_DIRS}")
 add_definitions(${PCL_DEFINITIONS})
 
+# OpenCV.
+find_package(OpenCV REQUIRED PATHS $ENV{OCV4_ROOT}/lib/cmake/opencv4 NO_DEFAULT_PATH)
+message(STATUS "OpenCV_VERSION = ${OpenCV_VERSION}")
+message(STATUS "OpenCV_INCLUDE_DIRS = ${OpenCV_INCLUDE_DIRS}")
+message(STATUS "OpenCV_INSTALL_PATH = ${OpenCV_INSTALL_PATH}")
+
 # The yaml-cpp package.
 find_package(yaml-cpp REQUIRED)
 message(STATUS "yaml-cpp_FOUND=${yaml-cpp_FOUND}")
@@ -115,6 +121,16 @@ add_executable(${EXE_TRIAL_TRY_EIGEN}
         src/Trials/TryEigen.cpp)
 target_link_libraries(${EXE_TRIAL_TRY_EIGEN} Eigen3::Eigen ${PCL_LIBRARIES})
 
+# ========== Local libraries. ==========
+
+set(LIB_CV_COMMON cv_common)
+add_library(${LIB_CV_COMMON} STATIC
+        includes/CVCommon/IO.hpp src/CVCommon/IO.cpp )
+target_include_directories(${LIB_CV_COMMON} PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(${LIB_CV_COMMON}
+        Eigen3::Eigen
+        ${OpenCV_LIBRARIES})
+
 # ========== Applications. ==========
 
 set(EXE_HOLE_BOUNDARY_DETECTION HoleBoundaryDetection)
@@ -151,6 +167,9 @@ target_link_libraries(${EXE_HOLE_BOUNDARY_DENSITY_MAP}
 set(EXE_HOLE_BOUNDARY_DEPTH_COMPLETION_DATA HoleDepthCompDataGen)
 add_executable(${EXE_HOLE_BOUNDARY_DEPTH_COMPLETION_DATA}
         src/HoleBoundaryDetection/HoleDepthCompletionDataGeneration.cpp)
+target_include_directories(${EXE_HOLE_BOUNDARY_DEPTH_COMPLETION_DATA} PRIVATE ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(${EXE_HOLE_BOUNDARY_DEPTH_COMPLETION_DATA}
         ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
-        Eigen3::Eigen ${PCL_LIBRARIES})
+        Eigen3::Eigen
+        ${PCL_LIBRARIES}
+        ${OpenCV_LIBRARIES} ${LIB_CV_COMMON})
