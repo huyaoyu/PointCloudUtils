@@ -8,25 +8,16 @@
 
 #include <Eigen/Dense>
 
-#include <pcl/features/moment_of_inertia_estimation.h>
 #include <pcl/filters/crop_box.h>
 
-#include "PCCommon/common.hpp"
-#include "PCCommon/extraction.hpp"
+#include "PCCommon/BBox.hpp"
+//#include "PCCommon/common.hpp"
+//#include "PCCommon/extraction.hpp"
 #include "PCCommon/IO.hpp"
-#include "PCCommon/Transform.hpp"
+//#include "PCCommon/Transform.hpp"
 #include "Profiling/SimpleTime.hpp"
 
-template < typename pT >
-static void get_obb( const typename pcl::PointCloud<pT>::Ptr pInput,
-        pcl::PointXYZ &minPoint, pcl::PointXYZ &maxPoint,
-        pcl::PointXYZ &position, Eigen::Matrix3f &rotMat ) {
-    pcl::MomentOfInertiaEstimation<pT> extractor;
-    extractor.setInputCloud(pInput);
-    extractor.compute();
-
-    extractor.getOBB( minPoint, maxPoint, position, rotMat );
-}
+#include "Tools/CropByOBBox.hpp"
 
 int main( int argc, char* argv[] ) {
     QUICK_TIME_START(te)
@@ -50,7 +41,7 @@ int main( int argc, char* argv[] ) {
     pcl::PointXYZ obbMinPoint, obbMaxPoint, obbPosition;
     Eigen::Matrix3f obbRotMat;
 
-    get_obb<pcl::PointXYZ>(pRef, obbMinPoint, obbMaxPoint, obbPosition, obbRotMat);
+    pcu::get_obb<pcl::PointXYZ>(pRef, obbMinPoint, obbMaxPoint, obbPosition, obbRotMat);
 
     std::cout << "oobMinPoint = " << std::endl << obbMinPoint << std::endl;
     std::cout << "oobMaxPoint = " << std::endl << obbMaxPoint << std::endl;
@@ -61,29 +52,34 @@ int main( int argc, char* argv[] ) {
     pcl::PointCloud<pcl::PointXYZ>::Ptr pToBeCropped =
             pcu::read_point_cloud<pcl::PointXYZ>( cropFn );
 
-    // Transform the point cloud.
-    Eigen::Matrix4f transMat =
-            pcu::create_eigen_transform_matrix_1( obbPosition, obbRotMat );
-
-    pcl::PointCloud<pcl::PointXYZ>::Ptr pTransformed =
-            pcu::transform_point_cloud<pcl::PointXYZ, float>( pToBeCropped, transMat );
-
-//    pcl::PointCloud<pcl::PointXYZ>::Ptr pTransformed =
-//            pcu::transform_point_cloud<pcl::PointXYZ, float>( pToBeCropped, obbPosition, obbRotMat );
-
-    // Crop the transformed point cloud by the bounding box.
-    pcl::PointCloud<pcl::PointXYZ>::Ptr pTransCropped =
-            pcu::crop_by_CropBox<pcl::PointXYZ>(pTransformed, obbMinPoint, obbMaxPoint);
-
-    // The transform matrix for transforming the cropped point cloud back to the original frame.
+//    // Transform the point cloud.
 //    Eigen::Matrix4f transMat =
-//            pcu::create_eigen_transform_matrix_0( obbPosition, obbRotMat );
+//            pcu::create_eigen_transform_matrix_1( obbPosition, obbRotMat );
+//
+//    pcl::PointCloud<pcl::PointXYZ>::Ptr pTransformed =
+//            pcu::transform_point_cloud<pcl::PointXYZ, float>( pToBeCropped, transMat );
+//
+////    pcl::PointCloud<pcl::PointXYZ>::Ptr pTransformed =
+////            pcu::transform_point_cloud<pcl::PointXYZ, float>( pToBeCropped, obbPosition, obbRotMat );
+//
+//    // Crop the transformed point cloud by the bounding box.
+//    pcl::PointCloud<pcl::PointXYZ>::Ptr pTransCropped =
+//            pcu::crop_by_CropBox<pcl::PointXYZ>(pTransformed, obbMinPoint, obbMaxPoint);
+//
+//    // The transform matrix for transforming the cropped point cloud back to the original frame.
+////    Eigen::Matrix4f transMat =
+////            pcu::create_eigen_transform_matrix_0( obbPosition, obbRotMat );
+//
+//    transMat = pcu::create_eigen_transform_matrix_0( obbPosition, obbRotMat );
+//
+//    // Transform back the point cloud.
+//    pcl::PointCloud<pcl::PointXYZ>::Ptr pCropped =
+//            pcu::transform_point_cloud<pcl::PointXYZ, float>( pTransCropped, transMat );
 
-    transMat = pcu::create_eigen_transform_matrix_0( obbPosition, obbRotMat );
 
-    // Transform back the point cloud.
     pcl::PointCloud<pcl::PointXYZ>::Ptr pCropped =
-            pcu::transform_point_cloud<pcl::PointXYZ, float>( pTransCropped, transMat );
+            pcu::crop_by_oriented_bbox<pcl::PointXYZ, float>( pToBeCropped,
+                    obbMinPoint, obbMaxPoint, obbPosition, obbRotMat );
 
     // Write the point cloud.
     std::string outFn = argv[3];

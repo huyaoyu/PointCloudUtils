@@ -32,6 +32,9 @@ message(STATUS "OpenCV_VERSION = ${OpenCV_VERSION}")
 message(STATUS "OpenCV_INCLUDE_DIRS = ${OpenCV_INCLUDE_DIRS}")
 message(STATUS "OpenCV_INSTALL_PATH = ${OpenCV_INSTALL_PATH}")
 
+FIND_LIBRARY( LIB_CNPY NAMES cnpy )
+message(STATUS "LIB_CNPY=${LIB_CNPY}")
+
 # The yaml-cpp package.
 find_package(yaml-cpp REQUIRED)
 message(STATUS "yaml-cpp_FOUND=${yaml-cpp_FOUND}")
@@ -55,7 +58,7 @@ add_executable(${EXE_TOOL_SMOOTH_FILTER} src/Tools/SmoothFilter.cpp)
 target_link_libraries(${EXE_TOOL_SMOOTH_FILTER} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
 set(EXE_TOOL_CROP_BBB CropByBBox)
-add_executable(${EXE_TOOL_CROP_BBB} src/Tools/CropByBBox.cpp)
+add_executable(${EXE_TOOL_CROP_BBB} src/Tools/CropByOBBox.cpp)
 target_link_libraries(${EXE_TOOL_CROP_BBB} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
 set(EXE_TOOL_NORMAL_ESTIMATION NormalEstimation)
@@ -172,4 +175,5 @@ target_link_libraries(${EXE_HOLE_BOUNDARY_DEPTH_COMPLETION_DATA}
         ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
         Eigen3::Eigen
         ${PCL_LIBRARIES}
-        ${OpenCV_LIBRARIES} ${LIB_CV_COMMON})
+        ${OpenCV_LIBRARIES} ${LIB_CV_COMMON}
+        ${LIB_CNPY})

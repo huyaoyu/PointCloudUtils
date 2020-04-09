@@ -33,7 +33,27 @@ template < typename rT >
 class HoleBoundaryPoints {
 public:
     HoleBoundaryPoints() = default;
+    HoleBoundaryPoints( const HoleBoundaryPoints<rT> &other ) {
+        this->id               = other.id;
+        this->polygonIndices   = other.polygonIndices;
+        this->equivalentNormal = other.equivalentNormal;
+        this->camProj          = other.camProj;
+    }
+
     ~HoleBoundaryPoints() = default;
+
+    HoleBoundaryPoints<rT>& operator = ( const HoleBoundaryPoints<rT> &other ) {
+        if ( &other == this ) {
+            return *this;
+        }
+
+        this->id               = other.id;
+        this->polygonIndices   = other.polygonIndices;
+        this->equivalentNormal = other.equivalentNormal;
+        this->camProj          = other.camProj;
+
+        return *this;
+    }
 
     void write_json_content( std::ofstream &ofs,
         const std::string& indent, int baseIndentNum ) const;

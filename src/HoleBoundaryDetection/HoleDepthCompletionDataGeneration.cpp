@@ -23,11 +23,15 @@
 #include "Args/Args.hpp"
 #include "CVCommon/All.hpp"
 #include "DataInterfaces/JSON/single_include/nlohmann/json.hpp"
+#include "DataInterfaces/NumPy/IO.hpp"
 #include "Filesystem/Filesystem.hpp"
 #include "HoleBoundaryDetection/HoleBoundaryProjector.hpp"
+#include "PCCommon/BBox.hpp"
 #include "PCCommon/common.hpp"
 #include "PCCommon/extraction.hpp"
 #include "PCCommon/IO.hpp"
+
+#include "Tools/CropByOBBox.hpp"
 
 // Namespaces.
 namespace bpo = boost::program_options;
@@ -339,6 +343,17 @@ static void find_bounding_box_pixel_plane( const Eigen::MatrixX<rT> &pixels,
     }
 }
 
+template < typename pT >
+static void shift_bbox_borders_metric( pT &minPoint, pT &maxPoint, float s ) {
+    minPoint.x -= s;
+    minPoint.y -= s;
+    minPoint.z -= s;
+
+    maxPoint.x += s;
+    maxPoint.y += s;
+    maxPoint.z += s;
+}
+
 template < typename pT, typename rT >
 static void make_depth_map(
         const typename pcl::PointCloud<pT>::Ptr pInput,
@@ -376,20 +391,20 @@ static void make_depth_map(
     // Copy to an Eigen matrix with the right dimension.
     Eigen::MatrixX<rT> cpp = cpz( Eigen::all, Eigen::seq(0, count-1) );
 
-    // Test use.
-    Eigen::MatrixX<rT> wp = ( camProj.R * camProj.RC * cpp ).colwise() + camProj.T;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr pWP =
-            pcu::convert_eigen_matrix_2_pcl_xyz<rT>( wp );
-    pcu::write_point_cloud<pcl::PointXYZ>("./WP.ply", pWP);
+//    // Test use.
+//    Eigen::MatrixX<rT> wp = ( camProj.R * camProj.RC * cpp ).colwise() + camProj.T;
+//    pcl::PointCloud<pcl::PointXYZ>::Ptr pWP =
+//            pcu::convert_eigen_matrix_2_pcl_xyz<rT>( wp );
+//    pcu::write_point_cloud<pcl::PointXYZ>("./WP.ply", pWP);
 
     // Project cpp to the pixel plane.
     Eigen::MatrixX<rT> pixels = camProj.K * cpp;
     pixels = ( pixels.array().rowwise() / pixels(2, Eigen::all).array().eval() ).matrix();
 
-    // Test use.
-    pcl::PointCloud<pcl::PointXYZ>::Ptr pPixels =
-            pcu::convert_eigen_matrix_2_pcl_xyz<rT>( pixels );
-    pcu::write_point_cloud<pcl::PointXYZ>("./Pixels.ply", pPixels);
+//    // Test use.
+//    pcl::PointCloud<pcl::PointXYZ>::Ptr pPixels =
+//            pcu::convert_eigen_matrix_2_pcl_xyz<rT>( pixels );
+//    pcu::write_point_cloud<pcl::PointXYZ>("./Pixels.ply", pPixels);
 
     // Create the depth map.
     depth.resize( camProj.height, camProj.width );
@@ -418,14 +433,69 @@ static void make_depth_map(
 
     std::cout << countDepth << " depth point projected to the pixel plane. " << std::endl;
 
-    // Test use.
-    pcl::PointCloud<pcl::PointXYZ>::Ptr pDepth =
-            pcu::convert_eigen_depth_img_2_pcl_xyz<rT>( depth );
-    pcu::write_point_cloud<pcl::PointXYZ>("./Depth.ply", pDepth);
+//    // Test use.
+//    pcl::PointCloud<pcl::PointXYZ>::Ptr pDepth =
+//            pcu::convert_eigen_depth_img_2_pcl_xyz<rT>( depth );
+//    pcu::write_point_cloud<pcl::PointXYZ>("./Depth.ply", pDepth);
 
     QUICK_TIME_END(te)
 
     std::cout << "Make depth map in " << te << " ms. " << std::endl;
+}
+
+template < typename pT, typename rT >
+static void write_cropped_depth_info(
+        const typename pcl::PointCloud<pT>::Ptr pInput,
+        const pcl::PointXYZ &obbMinPoint,
+        const pcl::PointXYZ &obbMaxPoint,
+        const pcl::PointXYZ &obbPosition,
+        const Eigen::Matrix3<rT> &obbRotMat,
+        const CameraProjection<rT> &camProj,
+        const std::string &outDir,
+        const std::string &prefix ) {
+    // Crop out the points from MVSO in the oriented bounding box.
+    typename pcl::PointCloud<pT>::Ptr pCropped =
+            pcu::crop_by_oriented_bbox<pT, rT>( pInput,
+                    obbMinPoint, obbMaxPoint, obbPosition, obbRotMat );
+
+    // Make a depth map for the MVSO.
+    Eigen::MatrixX<rT> depthCropped;
+    make_depth_map<pT, rT>( pCropped, camProj, depthCropped );
+
+    // Save the matrix as a float image.
+    std::string mvsoDepthImgFn = outDir + "/" + prefix + "_DepthImg.png";
+    write_eigen_matrixXf_2_image( mvsoDepthImgFn, depthCropped, 0.0f, 1.0f );
+
+    // Save the depth map as a table as NumPy format for other processing.
+    std::string depthNpyFn = outDir + "/" + prefix + "_DepthTable.npy";
+    write_depth_map_2_npy(depthNpyFn, depthCropped);
+
+    // Save the cropped point cloud for other processing.
+    std::string croppedFn = outDir + "/" + prefix + "_Cropped.ply";
+    pcu::write_point_cloud<pT>( croppedFn, pCropped );
+}
+
+template < typename rT >
+static void write_json( const std::string &fn,
+        int boundaryId,
+        rT camScale,
+        const CameraProjection<rT> &camProj ) {
+    std::ofstream ofs(fn);
+
+    if ( !ofs.good() ) {
+        EXCEPTION_FILE_NOT_GOOD(fn)
+    }
+
+    const std::string TAB = "    ";
+
+    ofs << "{" << std::endl;
+
+    ofs << TAB << "\"boundaryId\": " << boundaryId << "," << std::endl;
+    ofs << TAB << "\"camScale\": " << camScale << "," << std::endl;
+
+    ofs << TAB << "\"camProj\": ";
+    camProj.write_json_content(ofs, TAB, 1);
+    ofs << std::endl << "}";
 }
 
 int main( int argc, char* argv[] ) {
@@ -438,8 +508,13 @@ int main( int argc, char* argv[] ) {
     std::cout << "args: " << std::endl;
     std::cout << args << std::endl;
 
+    // The output directory with the hole ID.
+    std::stringstream ssOutDir;
+    ssOutDir << args.outDir << "/" << args.holeID;
+    std::string outDir = ssOutDir.str();
+
     // Test the output directory.
-    test_directory(args.outDir);
+    test_directory(outDir);
 
     // Read the hole boundary projection/polygon JSON file,
     // find and create a HoleBoundaryPoints object according to the specified ID.
@@ -458,12 +533,19 @@ int main( int argc, char* argv[] ) {
         return 1;
     }
 
-    // Scale the camera intrinsics.
-    pHBP->camProj.scale_intrinsics(args.camScale);
-
     // Test use.
     std::cout << "pHBP: " << std::endl;
     std::cout << *pHBP << std::endl;
+
+    // Make a copy of the CameraProjection object.
+    CameraProjection<float> scaledCamProj( pHBP->camProj );
+
+    // Scale the camera intrinsics.
+    scaledCamProj.scale_intrinsics(args.camScale);
+
+    // Test use.
+    std::cout << "scaledCampProj = " << std::endl;
+    std::cout << scaledCamProj << std::endl;
 
     // Load MVSB.
     pcl::PointCloud<pcl::PointXYZ>::Ptr pMVSB =
@@ -473,31 +555,58 @@ int main( int argc, char* argv[] ) {
     pcl::PointCloud<pcl::PointXYZ>::Ptr pBoundary =
             pcu::extract_points<pcl::PointXYZ, int>( pMVSB, pHBP->polygonIndices );
 
+    // Save the boundary points for future process.
+    std::string boundaryPointsFn = outDir + "/BoundaryPoints.ply";
+    pcu::write_point_cloud<pcl::PointXYZ>( boundaryPointsFn, pBoundary );
+
     // Project the boundary points to the 2D pixel plane.
     Eigen::MatrixXf boundaryPixels;
     project_pcl_points_2_pixel_plane<pcl::PointXYZ, float>(
-            pBoundary, pHBP->camProj, boundaryPixels );
+            pBoundary, scaledCamProj, boundaryPixels );
 
     // Find the 2D bounding box in the pixel plane.
     float bx0, by0, bx1, by1;
     find_bounding_box_pixel_plane( boundaryPixels, bx0, by0, bx1, by1 );
+
+    // Save the boundary pixels.
+    std::string boundaryPixelFn = outDir + "/BoundaryPixels.npy";
+    write_eigen_matrix_2_npy( boundaryPixelFn, boundaryPixels);
 
     // Test use.
     std::cout << "Pixel bounding box coordinates: "
               << "( " << bx0 << ", " << by0 << " ), "
               << "( " << bx1 << ", " << by1 << " ). " << std::endl;
 
-    // Load MVSO.
-    pcl::PointCloud<pcl::PointXYZ>::Ptr pMVSO =
-            pcu::read_point_cloud<pcl::PointXYZ>( args.inMVSOriginal );
+    // Compute the oriented bounding box of the boundary points.
+    pcl::PointXYZ obbMinPoint, obbMaxPoint, obbPosition;
+    Eigen::Matrix3f obbRotMat;
+    pcu::get_obb<pcl::PointXYZ>(pBoundary, obbMinPoint, obbMaxPoint, obbPosition, obbRotMat);
 
-    // Make a depth map for the MVSO.
-    Eigen::MatrixXf depthOriginal;
-    make_depth_map<pcl::PointXYZ, float>( pMVSO, pHBP->camProj, depthOriginal );
+    // Enlarge the b-box a little bit.
+    shift_bbox_borders_metric( obbMinPoint, obbMaxPoint, 0.02 );
 
-    // Save the matrix as a float image.
-    std::string mvsoDepthImgFn = args.outDir + "/MVSODepthImg.png";
-    write_eigen_matrixXf_2_image( mvsoDepthImgFn, depthOriginal, 0.0f, 1.0f );
+    std::vector<std::string> inputCloudFn = { args.inMVSOriginal, args.inLiDAR };
+    std::vector<std::string> outputPrefix = { "MVSO", "LiDAR" };
+
+    const int N = inputCloudFn.size();
+
+    for ( int i = 0; i < N; ++i ) {
+        std::cout << "Process " << inputCloudFn[i] << std::endl;
+
+        // Load point cloud.
+        pcl::PointCloud<pcl::PointXYZ>::Ptr pPointCloud =
+                pcu::read_point_cloud<pcl::PointXYZ>( inputCloudFn[i] );
+
+        // Write depth info.
+        write_cropped_depth_info<pcl::PointXYZ, float>(
+                pPointCloud,
+                obbMinPoint, obbMaxPoint, obbPosition, obbRotMat,
+                scaledCamProj, outDir, outputPrefix[i] );
+    }
+
+    // Write the JSON file.
+    std::string jsonFn = outDir + "/DepthCompletion.json";
+    write_json( jsonFn, pHBP->id, args.camScale, pHBP->camProj );
 
     return 0;
 }

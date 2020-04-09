@@ -147,10 +147,11 @@ template < typename rT >
 void CameraProjection<rT>::scale_intrinsics(rT s) {
     assert( s > 0 );
 
-    height = static_cast<int>( s * height );
-    width  = static_cast<int>( s * width );
+    height = static_cast<int>( std::round( s * height ) );
+    width  = static_cast<int>( std::round( s * width ) );
 
     K *= s;
+    K(2,2) = static_cast<rT>(1.0);
 }
 
 template < typename rT >
