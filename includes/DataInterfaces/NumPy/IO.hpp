@@ -58,4 +58,27 @@ void write_eigen_matrix_2_npy( const std::string &fn,
     }
 }
 
+template < typename rT >
+void read_npy_2_eigen_matrix( const std::string &fn,
+        Eigen::MatrixX<rT> &mat ) {
+    // Load the .npy file.
+    cnpy::NpyArray arr = cnpy::npy_load(fn);
+
+    rT* data = arr.data<rT>();
+
+    assert( 2 == arr.shape.size() );
+
+    const int dim0 = arr.shape[0];
+    const int dim1 = arr.shape[1];
+
+    mat.resize( dim0, dim1 );
+
+    Eigen::Matrix<rT, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> temp =
+            Eigen::Map< Eigen::Matrix<rT, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> > (
+            data, dim0, dim1 );
+
+    // Convert the row major matrix to column major?
+    mat = temp;
+}
+
 #endif //POINTCLOUDUTILS_INCLUDES_DATAINTERFACES_NUMPY_IO_HPP

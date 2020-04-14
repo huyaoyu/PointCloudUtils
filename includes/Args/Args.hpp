@@ -12,6 +12,24 @@
 
 #include <boost/algorithm/string.hpp>
 
+#include "Exception/Common.hpp"
+
+struct args_invalidation_failed : virtual exception_common_base {};
+
+#define EXCEPTION_INVALID_ARGUMENTS(args) \
+    {\
+        std::stringstream args##_ss;\
+        args##_ss << "Arguments validation failed. " << std::endl \
+                  << args << std::endl;\
+        BOOST_THROW_EXCEPTION( args_invalidation_failed() << ExceptionInfoString(args##_ss.str()) );\
+    }
+
+#define MAIN_COMMON_LINES(argc, argv, args) \
+    Args args; \
+    parse_args(argc, argv, args); \
+    std::cout << "args: " << std::endl; \
+    std::cout << args << std::endl;
+
 /**
  * This function is copied from
  * https://www.boost.org/doc/libs/1_60_0/libs/program_options/example/options_description.cpp

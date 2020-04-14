@@ -8,11 +8,14 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
 
 #include <Eigen/Dense>
+
+#include "DataInterfaces/Plain/FromVector.hpp"
 
 template < typename rT >
 class CameraProjection {
@@ -390,6 +393,30 @@ void convert_from_quaternion_translation_table(
         convert_from_quaternion_translation( id(i), quatEntry, posEntry, K, cps[i] );
     }
 
+}
+
+template < typename rT >
+std::shared_ptr< CameraProjection<rT> > create_camera_projection(
+        int id, int height, int width,
+        const std::vector<rT> &vK,
+        const std::vector<rT> &vRC,
+        const std::vector<rT> &vR,
+        const std::vector<rT> &vT,
+        const std::vector<rT> &vQ ) {
+    auto pCamProj = std::make_shared<CameraProjection<rT>>();
+
+    pCamProj->id = id;
+    pCamProj->height = height;
+    pCamProj->width = width;
+
+    convert_vector_2_eigen_mat3( vK,  pCamProj->K );
+    convert_vector_2_eigen_mat3( vRC, pCamProj->RC );
+    convert_vector_2_eigen_mat3( vR,  pCamProj->R );
+    convert_vector_2_eigen_vector( vT, pCamProj->T );
+
+    pCamProj->Q = Eigen::Quaternion<rT>( vQ[0], vQ[1], vQ[2], vQ[3] );
+
+    return pCamProj;
 }
 
 #endif //POINTCLOUDUTILS_INCLUDES_CAMERAGEOMETRY_CAMERAPROJECTION_HPP

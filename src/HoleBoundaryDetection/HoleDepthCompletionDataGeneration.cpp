@@ -23,7 +23,10 @@
 #include "Args/Args.hpp"
 #include "CVCommon/All.hpp"
 #include "DataInterfaces/JSON/single_include/nlohmann/json.hpp"
+#include "DataInterfaces/JSONHelper/Reader.hpp"
 #include "DataInterfaces/NumPy/IO.hpp"
+#include "DataInterfaces/Plain/FromVector.hpp"
+#include "Exception/Common.hpp"
 #include "Filesystem/Filesystem.hpp"
 #include "HoleBoundaryDetection/HoleBoundaryProjector.hpp"
 #include "PCCommon/BBox.hpp"
@@ -37,14 +40,6 @@
 namespace bpo = boost::program_options;
 using JSON = nlohmann::json;
 
-#define EXCEPTION_INVALID_ARGUMENTS(args) \
-    {\
-        std::stringstream args##_ss;\
-        args##_ss << "Arguments invalidation failed. " << std::endl \
-                  << args << std::endl;\
-        BOOST_THROW_EXCEPTION( args_invalidation_failed() << ExceptionInfoString(args##_ss.str()) );\
-    }
-
 #define EXCEPTION_ID_NOT_FOUND(id) \
     {\
         std::stringstream id##_ss;\
@@ -53,23 +48,8 @@ using JSON = nlohmann::json;
         BOOST_THROW_EXCEPTION( id_not_found() << ExceptionInfoString(id##_ss.str()) );\
     }
 
-#define EXCEPTION_FILE_NOT_GOOD(fn) \
-    {\
-        std::stringstream fn##_ss; \
-        fn##_ss << "File " << fn << " is not good. "; \
-        BOOST_THROW_EXCEPTION( file_not_good() << ExceptionInfoString(fn##_ss.str()) ); \
-    }
-
-#define EXCEPTION_DIAG_INFO(ex) \
-    boost::diagnostic_information(ex)
-
 // Exception definitions.
-struct exception_base           : virtual std::exception, virtual boost::exception { };
-struct args_invalidation_failed : virtual exception_base {};
-struct id_not_found             : virtual exception_base {};
-struct file_not_good            : virtual exception_base {};
-
-typedef boost::error_info<struct tag_info_string, std::string> ExceptionInfoString;
+struct id_not_found  : virtual exception_common_base {};
 
 class Args
 {
@@ -172,39 +152,6 @@ static void parse_args(int argc, char* argv[], Args& args) {
     }
 }
 
-static std::shared_ptr<JSON> read_json( const std::string &fn ) {
-    std::shared_ptr<JSON> pJson ( new JSON );
-
-    std::ifstream ifs(fn);
-
-    if ( !ifs.good() ) {
-        EXCEPTION_FILE_NOT_GOOD(fn)
-    }
-
-    ifs >> *pJson;
-
-    return pJson;
-}
-
-template < typename rT, typename derived >
-static void convert_vector_2_eigen_vector( const std::vector<rT> &v,
-        Eigen::MatrixBase<derived> &ev ) {
-    const std::size_t N = v.size();
-    assert(N > 0);
-
-    for ( std::size_t i = 0; i < N; ++i ) {
-        ev(i) = v[i];
-    }
-}
-
-template < typename rT >
-static void convert_vector_2_eigen_mat3( const std::vector<rT> &v,
-        Eigen::Matrix3<rT> &mat ) {
-    mat << v[0], v[1], v[2],
-           v[3], v[4], v[5],
-           v[6], v[7], v[8];
-}
-
 template < typename rT >
 static std::shared_ptr< pcu::HoleBoundaryPoints<rT> > find_boundary_polygon(
         const JSON &json, const int id ) {
@@ -260,9 +207,9 @@ static std::shared_ptr< pcu::HoleBoundaryPoints<rT> > find_boundary_polygon(
     cp.height = camProj["height"];
     cp.width  = camProj["width"];
 
-    convert_vector_2_eigen_mat3( camProj["K"].get< std::vector<float> >(), cp.K );
-    convert_vector_2_eigen_mat3( camProj["RC"].get< std::vector<float> >(), cp.RC );
-    convert_vector_2_eigen_mat3( camProj["R"].get< std::vector<float> >(), cp.R );
+    convert_vector_2_eigen_mat3( camProj["K"].get< std::vector<rT> >(), cp.K );
+    convert_vector_2_eigen_mat3( camProj["RC"].get< std::vector<rT> >(), cp.RC );
+    convert_vector_2_eigen_mat3( camProj["R"].get< std::vector<rT> >(), cp.R );
     convert_vector_2_eigen_vector( camProj["T"].get< std::vector<rT> >(), cp.T );
 
 //    Eigen::Vector4<rT> qv;
@@ -502,11 +449,7 @@ int main( int argc, char* argv[] ) {
     std::cout << "Hello, HoleDepthCompletionDataGeneration! " << std::endl;
 
     // Handle the command line.
-    Args args;
-    parse_args(argc, argv, args);
-
-    std::cout << "args: " << std::endl;
-    std::cout << args << std::endl;
+    MAIN_COMMON_LINES(argc, argv, args)
 
     // The output directory with the hole ID.
     std::stringstream ssOutDir;
@@ -570,7 +513,8 @@ int main( int argc, char* argv[] ) {
 
     // Save the boundary pixels.
     std::string boundaryPixelFn = outDir + "/BoundaryPixels.npy";
-    write_eigen_matrix_2_npy( boundaryPixelFn, boundaryPixels);
+    Eigen::MatrixXf boundaryPixelTable = boundaryPixels.transpose();
+    write_eigen_matrix_2_npy( boundaryPixelFn, boundaryPixelTable);
 
     // Test use.
     std::cout << "Pixel bounding box coordinates: "

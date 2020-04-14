@@ -35,6 +35,10 @@ message(STATUS "OpenCV_INSTALL_PATH = ${OpenCV_INSTALL_PATH}")
 FIND_LIBRARY( LIB_CNPY NAMES cnpy )
 message(STATUS "LIB_CNPY=${LIB_CNPY}")
 
+# Ceres Solver.
+find_package(Ceres REQUIRED)
+include_directories(${CERES_INCLUDE_DIRS})
+
 # The yaml-cpp package.
 find_package(yaml-cpp REQUIRED)
 message(STATUS "yaml-cpp_FOUND=${yaml-cpp_FOUND}")
@@ -176,4 +180,14 @@ target_link_libraries(${EXE_HOLE_BOUNDARY_DEPTH_COMPLETION_DATA}
         Eigen3::Eigen
         ${PCL_LIBRARIES}
         ${OpenCV_LIBRARIES} ${LIB_CV_COMMON}
+        ${LIB_CNPY})
+
+set(EXE_DEPTH_CPL_SIMPLE DepthCompletion_Simple)
+add_executable(${EXE_DEPTH_CPL_SIMPLE} src/DepthCompletion/Simple.cpp)
+target_link_libraries(${EXE_DEPTH_CPL_SIMPLE}
+        ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
+        Eigen3::Eigen
+        ${PCL_LIBRARIES}
+        ${OpenCV_LIBRARIES} ${LIB_CV_COMMON}
+        ${CERES_LIBRARIES}
         ${LIB_CNPY})
