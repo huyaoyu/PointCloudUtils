@@ -338,8 +338,10 @@ static void fill_depth_map(
 
     // Convert data type.
     Eigen::MatrixXd inDepthD, initGuessD;
-    naive_copy(inDepthMap, inDepthD);
-    naive_copy(initialGuess, initGuessD);
+//    naive_copy(inDepthMap, inDepthD);
+//    naive_copy(initialGuess, initGuessD);
+    inDepthD   = inDepthMap.template cast<double>();
+    initGuessD = initialGuess.template cast<double>();
 
     // Test use.
     std::cout << "initGuessD.mean() = " << initGuessD.mean() << std::endl;
@@ -369,9 +371,21 @@ static void fill_depth_map(
     Eigen::MatrixXd filledD = paddedFilledD.block( 1, 1, inDepthMap.rows(), inDepthMap.cols() );
 
     // Convert back.
-    naive_copy(filledD, filledDepthMap);
+//    naive_copy(filledD, filledDepthMap);
+    filledDepthMap = filledD.cast<rT>();
 
     std::cout << summary.FullReport() << std::endl;
+}
+
+template < typename rT >
+static void collect_filled_points_3d(
+        const Eigen::MatrixX<rT> &filled,
+        int shiftX, int shiftY,
+        const Eigen::MatrixXi inFlagMap,
+        const Eigen::MatrixX<rT> &boundaryPixels, 
+        const CameraProjection<rT> &camProj,
+        Eigen::MatrixX<rT> &filled3D ) {
+
 }
 
 class Args

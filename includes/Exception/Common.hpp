@@ -29,7 +29,7 @@ typedef boost::error_info<struct tag_info_string, std::string> ExceptionInfoStri
 #define EXCEPTION_EIGEN_ROW_MAJOR(m) \
     {\
         std::stringstream m##_ss; \
-        m##_ss << "#m" << " is row major. "; \
+        m##_ss << #m << " is row major. "; \
         BOOST_THROW_EXCEPTION( eigen_row_major() << ExceptionInfoString( m##_ss.str() ) ); \
     }
 

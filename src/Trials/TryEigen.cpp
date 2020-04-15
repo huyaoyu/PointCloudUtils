@@ -3,13 +3,31 @@
 //
 
 #include <iostream>
+#include <vector>
 
 #include <boost/math/constants/constants.hpp>
 
 #include <Eigen/Dense>
 
 #define SHOW_MATRIX(x) \
-    std::cout << #x << " = " << std::endl << x << std::endl;
+    { \
+        std::cout << #x << " = " << std::endl << x << std::endl; \
+        std::cout << #x << ".IsRowMajor = " << x.IsRowMajor << std::endl; \
+    }
+
+#define SHOW_MATRIX_RAW_DATA(x) \
+    { \
+        for ( int i = 0; i < x.size(); ++i ) { \
+            std::cout << #x << "[" << i << "] = " << *( x.data()+i ) << std::endl; \
+        } \
+    }
+
+template < typename rT0, typename rT1 >
+static void custom_dynamic_cast( const Eigen::MatrixX<rT0> &A ,
+        Eigen::MatrixX<rT1> &B ) {
+
+    B = A.template cast<rT1>();
+}
 
 int main( int argc, char* argv[] ) {
     std::cout << "Hello, TryEigen! " << std::endl;
@@ -35,11 +53,61 @@ int main( int argc, char* argv[] ) {
 
     SHOW_MATRIX(transMat)
 
+    // Test the column broadcasting.
     Eigen::MatrixXf pointMat = Eigen::MatrixXf::Random(3, 5);
     SHOW_MATRIX(pointMat)
 
     Eigen::MatrixXf transPoint = pointMat.colwise() - Eigen::Vector3f::Ones();
     SHOW_MATRIX(transPoint)
+
+    // Test the mapping mechanism.
+    {
+        std::vector<double> raw = { 0, 1, 2, 3, 4, 5 };
+        // The following line trigger a copy. mapped is a new column-major matrix.
+        Eigen::MatrixXd mapped = Eigen::Map< Eigen::MatrixXd >( raw.data(), 2, 3 );
+        SHOW_MATRIX(mapped)
+
+        mapped(0, 0) = 10.0; // This will not change the value stored in raw.
+        SHOW_MATRIX(mapped)
+
+        std::cout << "raw[0] = " << raw[0] << std::endl;
+
+        // Use the Map object directly.
+        Eigen::Map< Eigen::MatrixXd > mapped1( raw.data(), 2, 3 );
+        SHOW_MATRIX(mapped1)
+
+        // This will change the value in raw since mapped1 and raw are sharing the same memory.
+        mapped1(0, 0) = 10.0;
+        SHOW_MATRIX(mapped1)
+        std::cout << "raw[0] = " << raw[0] << std::endl;
+    }
+
+    {
+        // Test the row major memory layout.
+        Eigen::MatrixXi A(2,3);
+        A <<  0, 1, 2, 3, 4, 5;
+        SHOW_MATRIX(A)
+        SHOW_MATRIX_RAW_DATA(A)
+
+        // Make copy of A as a new RowMajor matrix.
+        Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> B = A;
+        SHOW_MATRIX(B)
+        SHOW_MATRIX_RAW_DATA(B)
+    }
+
+    {
+        // Test assignment between different types of matrix.
+        Eigen::MatrixXd A = Eigen::MatrixXd::Random(2,3);
+        Eigen::MatrixXf B;
+        B = A.cast<float>();
+
+        SHOW_MATRIX(A)
+        SHOW_MATRIX(B)
+
+        Eigen::MatrixXf C;
+        custom_dynamic_cast(A, C);
+        SHOW_MATRIX(C)
+    }
 
     return 0;
 }
