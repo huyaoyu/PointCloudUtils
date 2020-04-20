@@ -29,6 +29,13 @@ static void custom_dynamic_cast( const Eigen::MatrixX<rT0> &A ,
     B = A.template cast<rT1>();
 }
 
+template < typename Derived >
+static void test_block_as_argument(
+        const Eigen::MatrixBase<Derived> &m ) {
+    SHOW_MATRIX(m)
+    std::cout << "For derived type, must use typename Derived::Scalar to access the underlying scalar type." << std::endl;
+}
+
 int main( int argc, char* argv[] ) {
     std::cout << "Hello, TryEigen! " << std::endl;
 
@@ -107,6 +114,52 @@ int main( int argc, char* argv[] ) {
         Eigen::MatrixXf C;
         custom_dynamic_cast(A, C);
         SHOW_MATRIX(C)
+    }
+
+    {
+        // Test row and column scalar arithmetics.
+        std::cout << "Row and column scalar arithmetics." << std::endl;
+        Eigen::MatrixXf A(2,3);
+        A << 0, 1, 2, 3, 4, 5;
+
+        Eigen::MatrixXf B(A);
+
+        SHOW_MATRIX(A)
+        SHOW_MATRIX(B)
+
+//        A.row(0) = A.row(0) + 10.0f; // Not compile.
+//        B.col(0) += 10.0f; // Not compile.
+
+        Eigen::VectorXf a(2);
+        a << 10.0f, 0.0f;
+        A.colwise() += a;
+
+        Eigen::VectorXf b(3); // Not compile with row-wise operation.
+//        Eigen::MatrixXf b(1, 3); // Not compile with row-wise operation.
+        b << 10.0f, 0.0f, 0.0f;
+        B.rowwise() += b.transpose();
+
+        SHOW_MATRIX(A)
+        SHOW_MATRIX(B)
+
+        Eigen::MatrixXf C(2, 3);
+        C << 0, 1, 2, 3, 4, 5;
+        SHOW_MATRIX(C)
+
+        C.row(0).array() += 10;
+        SHOW_MATRIX(C)
+
+        C.row(1).array() *= 2;
+        SHOW_MATRIX(C)
+    }
+
+    {
+        // Test block as argument.
+        std::cout << "Test block as argument. " << std::endl;
+        Eigen::MatrixXf A(2,3);
+        A << 0, 1, 2, 3, 4, 5;
+
+        test_block_as_argument( A.block(0,0,2,2) );
     }
 
     return 0;

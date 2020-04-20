@@ -18,6 +18,7 @@
 #include <Eigen/Dense>
 
 #include <pcl/point_types.h>
+#include <pcl/PointIndices.h>
 
 namespace pcu
 {

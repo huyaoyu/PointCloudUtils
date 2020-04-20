@@ -95,6 +95,9 @@ public:
     void pixel_2_world(const Eigen::Vector3<rT>& pixelWithDepth,
                        Eigen::Vector3<rT>& wp ) const;
 
+    void pixel_2_world(const Eigen::MatrixX<rT> &pixelsWithDepth,
+            Eigen::MatrixX<rT> &wp) const;
+
     bool is_camera_point_in_image( const Eigen::Vector3<rT>& cp ) const;
     bool is_world_point_in_image( const Eigen::Vector3<rT>& wp ) const;
 
@@ -257,6 +260,25 @@ void CameraProjection<rT>::pixel_2_world(const Eigen::Vector3<rT> &pixelWithDept
     Eigen::Vector3<rT> cp;
     pixel_2_camera(pixelWithDepth, cp);
     camera_2_world(cp, wp);
+}
+
+template < typename rT >
+void CameraProjection<rT>::pixel_2_world(const Eigen::MatrixX<rT> &pixelsWithDepth,
+                   Eigen::MatrixX<rT> &wp) const {
+    // Copy input and reuse.
+    wp = pixelsWithDepth;
+
+    // Pixel to sensor.
+    wp.row(0).array() -= K(0, 2);
+    wp.row(0).array() /= K(0, 0);
+    wp.row(0).array() *= pixelsWithDepth.row(2).array();
+
+    wp.row(1).array() -= K(1, 2);
+    wp.row(1).array() /= K(1, 1);
+    wp.row(1).array() *= pixelsWithDepth.row(2).array();
+
+    // Sensor to world.
+    wp = (R * RC * wp).eval().colwise() + T;
 }
 
 template < typename rT >
