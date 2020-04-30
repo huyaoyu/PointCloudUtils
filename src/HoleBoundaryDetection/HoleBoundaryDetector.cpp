@@ -3,11 +3,14 @@
 //
 
 #include <fstream>
+#include <set>
 
 #include <boost/pending/disjoint_sets.hpp>
 
 #include <pcl/common/centroid.h> // computeMeanAndCovarianceMatrix().
 #include <pcl/features/feature.h> // solvePlaneParameters().
+#include <pcl/features/normal_3d.h>
+#include <pcl/kdtree/kdtree_flann.h>
 
 #include "DataInterfaces/JSON/single_include/nlohmann/json.hpp"
 #include "Graph/Edge.hpp"
@@ -15,6 +18,7 @@
 #include "PCCommon/common.hpp"
 #include "PCCommon/extraction.hpp"
 #include "Visualization/Color.hpp"
+#include "Visualization/Print.hpp"
 
 using namespace pcu;
 
@@ -51,7 +55,6 @@ ProximityGraph<HBDetector::P_t>& HBDetector::get_proximity_graph() {
 void HBDetector::build_proximity_graph() {
     proximityGraph.set_point_cloud(pInput);
     proximityGraph.set_k_r(pgK, pgR);
-
     proximityGraph.process(pgSDB);
 }
 
@@ -377,7 +380,7 @@ void HBDetector::make_disjoint_boundary_candidates() {
     QUICK_TIME_START(te)
 
     // Clear the current disjoint sets.
-    disjointBoundaryCandidates.clear();
+    disjointPointSets.clear();
 
     // Extract the current boundary candidate points.
     PC_t::Ptr candidatePoints ( new PC_t );
@@ -397,16 +400,130 @@ void HBDetector::make_disjoint_boundary_candidates() {
     create_edges_from_points( boundaryCandidates, rpg, edges );
 
     // Make the disjoint sets.
-    make_disjoint_sets_from_edges( edges, boundaryCandidates, disjointBoundaryCandidates );
+    make_disjoint_sets_from_edges( edges, boundaryCandidates, disjointPointSets );
 
     QUICK_TIME_END(te)
 
     std::cout << "make_disjoint_boundary_candidates() in " << te << "ms. " << std::endl;
 }
 
+template < typename iT >
+static void fill_consecutive_indices( int n, std::vector<iT> &indices ) {
+    assert( n > 0 );
+
+    indices.resize(n);
+
+    for ( int i = 0; i < n; ++i ) {
+        indices[i] = i;
+    }
+}
+
+//template < typename pT >
+//static void find_circle( const typename pcl::PointCloud<pT>::Ptr pInput,
+//        IndexSet &circleIndices ) {
+//    // Clear.
+//    circleIndices.clear();
+//
+//    // kdtree.
+//    typename pcl::KdTreeFLANN<pT>::Ptr tree ( new pcl::KdTreeFLANN<pT> );
+//    tree->setInputCloud(pInput);
+//    std::vector<int> indexKNN(3);
+//    std::vector<float> squaredDistance(3);
+//
+//    std::set<int> linkedSet;
+//    linkedSet.insert(0);
+//    int tails[2] = {0, 0};
+//    int tailIdx = 0;
+//
+//    int sdi[2];
+//    float sd[2];
+//
+//    const int N = pInput->size();
+//
+//    for ( int i = 0; i < N; ++i ) {
+//        // Find the neighbors.
+//        tree->nearestKSearch( *pInput, tails[tailIdx], 3, indexKNN, squaredDistance );
+//
+//        int tempIdx = 0;
+//        for ( int j = 0; j < 3; ++j ) {
+//            if ( indexKNN[j] != tails[tailIdx] ) {
+//                sdi[tempIdx] = j;
+//                sd[tempIdx] = j;
+//                tempIdx++;
+//                if ( 2 == tempIdx ) {
+//                    break;
+//                }
+//            }
+//        }
+//
+//        int first, second;
+//        if ( sd[0] <= sd[1] ) {
+//            first  = sdi[0];
+//            second = sdi[1];
+//        } else {
+//            first  = sdi[1];
+//            second = sdi[0];
+//        }
+//
+//        if ( first == tails[1-tailIdx] ) {
+//
+//        }
+//    }
+//
+//}
+//
+//template < typename pT >
+//static void find_circle_indices(
+//        const typename pcl::PointCloud<pT>::Ptr pInput,
+//        const std::vector<int> &indices,
+//        std::vector< IndexSet > &output ) {
+//    // Extract points.
+//    typename pcl::PointCloud<pT>::Ptr pointSet =
+//            pcu::extract_points<pT, int>( pInput, indices );
+//
+//    const int nPoints = indices.size();
+//    if ( nPoints <= 3 ) {
+//        // No further operations.
+//        return;
+//    }
+//
+//    int nRemain = nPoints;
+//
+//    while ( nRemain > 3 ) {
+//        // Find circle in pointSet.
+//        IndexSet circleIndices;
+//        find_circle<pT>( pointSet, circleIndices );
+//    }
+//}
+//
+//void HBDetector::find_circles() {
+//    QUICK_TIME_START(te)
+//
+//    const std::size_t N = disjointPointSets.size();
+//
+//    for ( std::size_t i = 0; i < N; ++i ) {
+//        find_circle_indices<P_t>( pInput, disjointPointSets[i], disjointBoundaryCandidates );
+//    }
+//
+//    QUICK_TIME_END(te)
+//    std::cout << "Find circles in " << te << " ms. " << std::endl;
+//}
+
+static void copy_indices_2_index_sets( const std::vector< std::vector<int> > &vIndices,
+        std::vector< IndexSet > &indexSets ) {
+    assert( vIndices.size() > 0 );
+
+    indexSets.resize( vIndices.size() );
+
+    for ( int i = 0; i < vIndices.size(); ++i ) {
+        indexSets[i].copy_indices( vIndices[i] );
+    }
+}
+
 template < typename pT >
 static void compute_cluster_normal( const typename pcl::PointCloud<pT>::Ptr pInput,
         const pcl::PointIndices::Ptr pIndices,
+        float vpX, float vpY, float vpZ,
         pcl::PointNormal& pn ) {
     EIGEN_ALIGN16 Eigen::Matrix3f convMat;
     EIGEN_ALIGN16 Eigen::Vector4f centroid;
@@ -424,6 +541,10 @@ static void compute_cluster_normal( const typename pcl::PointCloud<pT>::Ptr pInp
             normalCurvature[0], normalCurvature[1], normalCurvature[2], normalCurvature[3] );
 
     pn.x = centroid(0); pn.y = centroid(1); pn.z = centroid(2);
+
+    flipNormalTowardsViewpoint( pn, vpX, vpY, vpZ,
+            normalCurvature[0], normalCurvature[1], normalCurvature[2]);
+
     pn.normal_x = normalCurvature[0]; pn.normal_y = normalCurvature[1]; pn.normal_z = normalCurvature[2];
     pn.curvature = normalCurvature[3];
 }
@@ -461,6 +582,10 @@ static void average_cluster_normal( const typename pcl::PointCloud<pT>::Ptr pInp
 }
 
 void HBDetector::compute_centroid_and_equivalent_normal() {
+    // The centroid of the input point cloud.
+    Eigen::Vector4f centroid;
+    pcl::compute3DCentroid(*pInput, centroid);
+
     pEquivalentNormal->clear();
 
     for ( const auto& d : disjointBoundaryCandidates ) {
@@ -470,12 +595,13 @@ void HBDetector::compute_centroid_and_equivalent_normal() {
 
         // Extract points.
         pcl::PointIndices::Ptr pclIndices ( new pcl::PointIndices );
-        convert_vector_2_pcl_indices( d, pclIndices );
+        convert_vector_2_pcl_indices( d.indices, pclIndices );
 
         pcl::PointNormal pn;
 
-        if ( d.size() > equivalentNormalAveragingLimit ) {
-            compute_cluster_normal<P_t>(pInput, pclIndices, pn);
+        if ( d.indices.size() > equivalentNormalAveragingLimit ) {
+            compute_cluster_normal<P_t>(pInput, pclIndices,
+                    centroid(0), centroid(1), centroid(2), pn);
         } else {
             average_cluster_normal<P_t>(pInput, pclIndices, pn);
         }
@@ -488,18 +614,28 @@ void HBDetector::compute_centroid_and_equivalent_normal() {
 
 void HBDetector::process(){
     // Build the proximity graph.
+    print_bar("Detector: Build the proximity graph.", 40);
     build_proximity_graph();
 
     // Compute the criteria.
+    print_bar("Detector: Compute criteria.", 40);
     compute_criteria();
 
     // Coherence filter.
+    print_bar("Detector: Coherence filter.", 40);
     coherence_filter();
 
     // Make disjoint sets from the boundary candidates.
+    print_bar("Detector: Disjoint boundary candidates.", 40);
     make_disjoint_boundary_candidates();
 
+//    // Find circles in each disjoint set.
+//    print_bar("Find circles in each disjoint set.");
+    // A Compromise: convert disjointPointSets to disjointBoundaryCandidates.
+    copy_indices_2_index_sets( disjointPointSets, disjointBoundaryCandidates );
+
     // Compute the centroid and equivalent normal of the disjoint sets.
+    print_bar("Detector: Centroid and equivalent normal.", 40);
     compute_centroid_and_equivalent_normal();
 }
 
@@ -597,7 +733,7 @@ void HBDetector::create_rgb_representation_by_disjoint_candidates(
     for ( const auto& d : disjointBoundaryCandidates ) {
         const std::uint32_t c = color.next();
 
-        for ( const int i : d ) {
+        for ( const int i : d.indices ) {
             pOutput->at(i).rgba = c;
         }
     }
@@ -695,8 +831,10 @@ void HBDetector::write_disjoint_sets_and_normal_as_json( const std::string& fn )
         write_array_json(ofs, "centroid", point.data, 3);
         ofs << "," << std::endl << TAB << TAB;
         write_array_json(ofs, "normal", point.normal, 3);
-        ofs << "," << std::endl << TAB << TAB;
-        write_array_json(ofs, "indices", disjointBoundaryCandidates[i], 10, TAB3);
+        ofs << "," << std::endl;
+        ofs << TAB << TAB << "\"curvature\": " << point.curvature << "," << std::endl;
+        ofs << TAB << TAB;
+        write_array_json(ofs, "indices", disjointBoundaryCandidates[i].indices, 10, TAB3);
 
         if ( i == N - 1 ) {
             ofs << std::endl << TAB << "}" << std::endl;
@@ -744,7 +882,7 @@ void pcu::read_equivalent_normal_from_json( const std::string& fn,
         point.normal_x = e["normal"][0].get<float>();
         point.normal_y = e["normal"][1].get<float>();
         point.normal_z = e["normal"][2].get<float>();
-        point.curvature = 0.0f;
+        point.curvature = e["curvature"];
 
         normal->at(i) = point;
 

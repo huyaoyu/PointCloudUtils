@@ -128,6 +128,14 @@ add_executable(${EXE_TRIAL_TRY_EIGEN}
         src/Trials/TryEigen.cpp)
 target_link_libraries(${EXE_TRIAL_TRY_EIGEN} Eigen3::Eigen ${PCL_LIBRARIES})
 
+set(EXE_TRIAL_TRY_SMART_POINTER Trail_TrySmartPointer)
+add_executable(${EXE_TRIAL_TRY_SMART_POINTER}
+        src/Trials/TrySmartPointer.cpp)
+#target_link_libraries(${EXE_TRIAL_TRY_SMART_POINTER})
+
+set(EXE_TRIAL_TRY_CMATH Trail_TryCMath)
+add_executable(${EXE_TRIAL_TRY_CMATH} src/Trials/TryCMath.cpp)
+
 # ========== Local libraries. ==========
 
 set(LIB_CV_COMMON cv_common)
@@ -183,8 +191,18 @@ target_link_libraries(${EXE_HOLE_BOUNDARY_DEPTH_COMPLETION_DATA}
         ${LIB_CNPY})
 
 set(EXE_DEPTH_CPL_SIMPLE DepthCompletion_Simple)
-add_executable(${EXE_DEPTH_CPL_SIMPLE} src/DepthCompletion/Simple.cpp)
+add_executable(${EXE_DEPTH_CPL_SIMPLE} src/DepthCompletion/SimpleCameraPlane.cpp)
 target_link_libraries(${EXE_DEPTH_CPL_SIMPLE}
+        ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
+        Eigen3::Eigen
+        ${PCL_LIBRARIES}
+        ${OpenCV_LIBRARIES} ${LIB_CV_COMMON}
+        ${CERES_LIBRARIES}
+        ${LIB_CNPY})
+
+set(EXE_DEPTH_CPL_SIMPLE_BBOX DepthCompletion_SimpleBBoxPlane)
+add_executable(${EXE_DEPTH_CPL_SIMPLE_BBOX} src/DepthCompletion/SimpleBBoxPlane.cpp)
+target_link_libraries(${EXE_DEPTH_CPL_SIMPLE_BBOX}
         ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
         Eigen3::Eigen
         ${PCL_LIBRARIES}

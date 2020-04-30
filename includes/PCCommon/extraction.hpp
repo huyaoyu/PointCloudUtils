@@ -22,7 +22,27 @@ void extract_points( const typename pcl::PointCloud<pT>::Ptr pInput,
     extract.setInputCloud(pInput);
     extract.setIndices(indices);
     extract.setNegative(false);
+
+    if ( pInput.get() == pOutput.get() ) {
+        typename pcl::PointCloud<pT>::Ptr pTemp ( new pcl::PointCloud<pT> );
+        extract.filter( *pTemp );
+        pOutput = pTemp; // Should work.
+    } else {
+        extract.filter( *pOutput );
+    }
+}
+
+template < typename pT >
+typename pcl::PointCloud<pT>::Ptr extract_points( const typename pcl::PointCloud<pT>::Ptr pInput,
+                     const pcl::PointIndices::Ptr indices ) {
+    pcl::ExtractIndices<pT> extract;
+    extract.setInputCloud(pInput);
+    extract.setIndices(indices);
+    extract.setNegative(false);
+
+    typename pcl::PointCloud<pT>::Ptr pOutput( new pcl::PointCloud<pT> );
     extract.filter( *pOutput );
+    return pOutput;
 }
 
 template < typename pT, typename iT >

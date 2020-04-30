@@ -1,4 +1,8 @@
 //
+// Created by yaoyu on 4/28/20.
+//
+
+//
 // Created by yaoyu on 4/13/20.
 //
 
@@ -25,7 +29,6 @@
 #include <glog/logging.h>
 
 #include "Args/Args.hpp"
-#include "CameraGeometry/CameraProjection.hpp"
 #include "CVCommon/All.hpp"
 #include "DataInterfaces/JSON/single_include/nlohmann/json.hpp"
 #include "DataInterfaces/JSONHelper/Reader.hpp"
@@ -33,7 +36,9 @@
 #include "Exception/Common.hpp"
 #include "Filesystem/Filesystem.hpp"
 #include "PCCommon/common.hpp"
+#include "PCCommon/BBox.hpp"
 #include "PCCommon/IO.hpp"
+#include "PCCommon/Transform.hpp"
 
 // Namespaces.
 namespace bpo = boost::program_options;
@@ -42,137 +47,119 @@ using JSON = nlohmann::json;
 static const int FLAG_MVS_POINT=1;
 static const int FLAG_LDR_POINT=2;
 
-template < typename rT >
-static std::shared_ptr< CameraProjection<rT> > json_2_camera_projection(
-        const JSON &param ) {
-    // Read all the parameters associated with an CameraProjection object.
+/**
+ * This function find the nearest multiples of \base around \target
+ * such that the result is bigger than target in terms of
+ * absolute value. The result will have the same sign of \target.
+ * \base must be positive.
+ *
+ * @tparam bT Type of \base.
+ * @tparam tT Type of \target.
+ * @param base A positive number.
+ * @param target The target number around which to find the multiples of \base.
+ * @return The result multiples of \base.
+ */
+template < typename bT, typename tT>
+static tT bigger_multiples(bT base, tT target) {
+    assert(base > 0);
 
-    int id     = param["camProj"]["id"];
-    int height = param["camProj"]["height"];
-    int width  = param["camProj"]["width"];
-
-    auto vK  = param["camProj"]["K"].get< std::vector<rT> >();
-    auto vRC = param["camProj"]["RC"].get< std::vector<rT> >();
-    auto vR  = param["camProj"]["R"].get< std::vector<rT> >();
-    auto vT  = param["camProj"]["T"].get< std::vector<rT> >();
-    auto vQ  = param["camProj"]["Q"].get< std::vector<rT> >();
-
-    std::shared_ptr<CameraProjection<rT>> pCamProj =
-            create_camera_projection( id, height, width,
-                                      vK, vRC, vR, vT, vQ );
-
-    // Scale.
-    rT s = param["camScale"];
-
-    pCamProj->scale_intrinsics(s);
-
-    return pCamProj;
+    return static_cast<tT>(
+            std::copysign( std::ceil( 1.0 * std::abs(target) / base ) * base, target ) );
 }
 
+/**
+ * Make an initial depth map on the x-y plane.
+ *
+ * This function assumes the z-axis is the depth direction.
+ *
+ * @tparam rT Floating number type.
+ * @param dx The x-step for the discretized grid.
+ * @param dy the y-step for the discretized grid.
+ * @param xyLimits A 4-element vector. (x0, y0, x1, y1).
+ * @param pointsMVS The MVS points. 3xN.
+ * @param pointsLiDAR The LiDAR points. 3xN.
+ * @param plane The xy plane to be created.
+ * @param flagMat A matrix the same size with \plane storing the flag for types of points.
+ * @param gridDef A 4-element vector stores the grid definition. (x0, y0, dx, dy).
+ */
 template < typename rT >
-static void make_initial_depth_map(
-        const CameraProjection<rT> &camProj,
-        const Eigen::MatrixX<rT> &tableMVS,
-        const Eigen::MatrixX<rT> &tableLiDAR,
-        Eigen::MatrixX<rT> &img,
-        Eigen::MatrixXi &flagMat ){
-    assert( tableMVS.rows() > 0 );
-    assert( tableLiDAR.rows() > 0 );
+static void make_initial_depth_plane(
+        rT dx, rT dy,
+        const Eigen::Vector4<rT> &xyLimits,
+        const Eigen::MatrixX<rT> &pointsMVS,
+        const Eigen::MatrixX<rT> &pointsLiDAR,
+        Eigen::MatrixX<rT> &plane,
+        Eigen::MatrixXi &flagMat,
+        Eigen::Vector4<rT> &gridDef ){
+    assert( dx > 0 );
+    assert( dy > 0 );
+    assert( xyLimits(2) - xyLimits(0) > 2*dx );
+    assert( xyLimits(3) - xyLimits(1) > 2*dy );
 
-    // Create a blank image and a flag image.
-    img.resize( camProj.height, camProj.width );
-    flagMat.resize( camProj.height, camProj.width );
+    // Figure out the span of the plane.
+    const auto x0 = bigger_multiples<rT, rT>( dx, xyLimits(0) );
+    const auto y0 = bigger_multiples<rT, rT>( dy, xyLimits(1) );
+    const auto x1 = bigger_multiples<rT, rT>( dx, xyLimits(2) );
+    const auto y1 = bigger_multiples<rT, rT>( dy, xyLimits(3) );
+    const auto nx = static_cast<int>( std::round( ( x1 - x0 ) / dx ) );
+    const auto ny = static_cast<int>( std::round( ( y1 - y0 ) / dy ) );
 
-    // Clear the content of img and flagMat.
-    img     = Eigen::MatrixXf::Zero( camProj.height, camProj.width );
-    flagMat = Eigen::MatrixXi::Zero( camProj.height, camProj.width );
+    // Save the grid definition.
+    gridDef << x0, y0, dx, dy;
 
-    for ( int i = 0; i < tableMVS.rows(); ++i ) {
+    // Create the blank plane and flag grids.
+    plane.resize( ny, nx );
+    flagMat.resize( ny, nx );
+    Eigen::MatrixXi count = Eigen::MatrixXi::Zero(ny, nx);
+
+    // Clear the content of plane and flagMat.
+    plane   = Eigen::MatrixXf::Zero( ny, nx );
+    flagMat = Eigen::MatrixXi::Zero( ny, nx );
+
+    rT x, y, z;
+
+    // MVS points.
+    for ( int i = 0; i < pointsMVS.cols(); ++i ) {
+        x = pointsMVS(0, i);
+        y = pointsMVS(1, i);
+        z = pointsMVS(2, i);
+
+        if ( x < x0 || x > x1 || y < y0 || y > y1 ) {
+            continue;
+        }
+
+        // Get the cell coordinates of the grid.
+        const auto idxX = static_cast<int>( std::floor( ( x - x0 ) / dx ) );
+        const auto idxY = static_cast<int>( std::floor( ( y - y0 ) / dy ) );
+
+        plane(idxY, idxX)   = plane(idxY, idxX) + ( z - plane(idxY, idxX) ) / ( count(idxY, idxX) + 1 );
+        flagMat(idxY, idxX) = FLAG_MVS_POINT;
+        count(idxY, idxX)  += 1;
+    }
+
+    // LiDAR points.
+    for ( int i = 0; i < pointsLiDAR.cols(); ++i ) {
+        x = pointsLiDAR(0, i);
+        y = pointsLiDAR(1, i);
+        z = pointsLiDAR(2, i);
+
+        if ( x < x0 || x > x1 || y < y0 || y > y1 ) {
+            continue;
+        }
+
         // Get the pixel coordinates.
-        const int x = static_cast<int>( std::round( tableMVS(i, 0) ) );
-        const int y = static_cast<int>( std::round( tableMVS(i, 1) ) );
+        const auto idxX = static_cast<int>( std::floor( ( x - x0 ) / dx ) );
+        const auto idxY = static_cast<int>( std::floor( ( y - y0 ) / dy ) );
 
-        img(y, x) = tableMVS( i, 2 );
-        flagMat(y, x) = FLAG_MVS_POINT;
-    }
-
-    for ( int i = 0; i < tableLiDAR.rows(); ++i ) {
-        // Get the pixel coordinates.
-        const int x = static_cast<int>( std::round( tableLiDAR(i, 0) ) );
-        const int y = static_cast<int>( std::round( tableLiDAR(i, 1) ) );
-
-        // Get the LiDAR depth value.
-        rT v = tableLiDAR(i, 2);
-
-        // Check overlapping.
-        if ( 0 == img(y, x) ) {
-            img( y, x )   = v;
-            flagMat(y, x) = FLAG_LDR_POINT;
-        } else {
-            if ( v < img(y, x) ) {
-                img(y, x) = v;
-                flagMat(y, x) = FLAG_LDR_POINT;
-            }
+        // Check overlapping with MVS points.
+        if ( FLAG_MVS_POINT == flagMat(idxY, idxX) ) {
+            continue;
         }
+
+        plane(idxY, idxX)   = plane(idxY, idxX) + ( z - plane(idxY, idxX) ) / ( count(idxY, idxX) + 1 );
+        flagMat(idxY, idxX) = FLAG_LDR_POINT;
+        count(idxY, idxX)  += 1;
     }
-}
-
-template < typename rT >
-static void get_image_plane_bbox( const Eigen::MatrixX<rT> &img,
-        int &x0, int &y0, int &x1, int &y1 ) {
-    x0 = img.cols(); y0 = img.rows();
-    x1 = 0; y1 = 0;
-
-    for ( int i = 0; i < img.cols(); ++i ) {
-        for ( int j = 0; j < img.rows(); ++j ) {
-            if ( img( j, i ) > 0 ) {
-                if ( i < x0 ) {
-                    x0 = i;
-                }
-
-                if ( i > x1 ) {
-                    x1 = i;
-                }
-
-                if ( j < y0 ) {
-                    y0 = j;
-                }
-
-                if ( j > y1 ) {
-                    y1 = j;
-                }
-            }
-        }
-    }
-}
-
-template < typename rT >
-static void get_average_initial_guess(
-        const Eigen::MatrixX<rT> &inDepthMap,
-        const Eigen::MatrixXi &inFlagMap,
-        Eigen::MatrixX<rT> &guess ) {
-    const int rows = inDepthMap.rows();
-    const int cols = inDepthMap.cols();
-
-    // Allocate memory.
-    guess.resize( rows, cols );
-
-    // The average value.
-    auto avg = static_cast<rT>(0);
-    int count = 0;
-
-    for ( int i = 0; i < cols; ++i ) {
-        for ( int j = 0; j < rows; ++j ) {
-            if ( FLAG_MVS_POINT == inFlagMap(j, i) ) {
-                avg += inDepthMap(j, i);
-                count++;
-            }
-        }
-    }
-
-    guess = Eigen::MatrixX<rT>::Constant( rows, cols, avg/count );
-
-    std::cout << "average depth is " << avg/count << std::endl;
 }
 
 struct CF_MVS {
@@ -224,11 +211,11 @@ struct CF_Prior_5 {
 
     template < typename rT >
     bool operator () ( const rT* const n0,
-            const rT* const n1,
-            const rT* const n2,
-            const rT* const n3,
-            const rT* const n4,
-            rT* residual ) const {
+                       const rT* const n1,
+                       const rT* const n2,
+                       const rT* const n3,
+                       const rT* const n4,
+                       rT* residual ) const {
         residual[0] = rT(0.25*factor) * (
                 ceres::abs( n3[0] - n0[0] ) +
                 ceres::abs( n1[0] - n0[0] ) +
@@ -353,7 +340,7 @@ static void fill_depth_map(
     // Ceres problem.
     ceres::Problem problem;
     build_op_problem( inDepthD, initGuessD, inFlagMap, problem, paddedFilledD,
-            fMVS, fLiDAR, fPrior );
+                      fMVS, fLiDAR, fPrior );
 
     ceres::Solver::Options options;
     options.max_num_iterations = 10000;
@@ -379,13 +366,13 @@ static void fill_depth_map(
 }
 
 template < typename rT >
-static void find_non_mvs_pixels(
+static void find_non_mvs_cells(
         const Eigen::MatrixX<rT> &inMap,
         const Eigen::MatrixXi &inFlagMap,
-        Eigen::MatrixX<rT> &nonMVSPixels ) {
-    assert( !nonMVSPixels.IsRowMajor );
+        Eigen::MatrixX<rT> &nonMVSCells ) {
+    assert( !nonMVSCells.IsRowMajor );
 
-    std::vector<rT> vPixels;
+    std::vector<rT> vCells;
 
     const int rows = inMap.rows();
     const int cols = inMap.cols();
@@ -399,15 +386,31 @@ static void find_non_mvs_pixels(
                 continue;
             }
 
-            vPixels.push_back( static_cast<rT>(i) );
-            vPixels.push_back( static_cast<rT>(j) );
-            vPixels.push_back( inMap(j, i) );
+            vCells.push_back( static_cast<rT>(i) );
+            vCells.push_back( static_cast<rT>(j) );
+            vCells.push_back( inMap(j, i) );
         }
     }
 
-    // Copy the data from the vPixels to nonMVSPixels.
-    nonMVSPixels.resize( 3, vPixels.size()/3 );
-    nonMVSPixels = Eigen::Map< Eigen::MatrixX<rT> >( vPixels.data(), 3, vPixels.size()/3 );
+    // Copy the data from the vCells to nonMVSCells.
+    nonMVSCells.resize( 3, vCells.size()/3 );
+    nonMVSCells = Eigen::Map< Eigen::MatrixX<rT> >( vCells.data(), 3, vCells.size()/3 );
+}
+
+template < typename rT >
+static void convert_cells_2_points( const Eigen::MatrixX<rT> &cells,
+        const Eigen::Vector4<rT> &gridDef,
+        Eigen::MatrixX<rT> &points ) {
+    assert( 3 == cells.rows() );
+
+    points = cells;
+
+    Eigen::Vector3<rT> v0, vD;
+    v0 << gridDef(0) + gridDef(2)/2.0, gridDef(1) + gridDef(3)/2.0, 0;
+    vD << gridDef(2), gridDef(3), 1;
+
+    points.array().colwise() *= vD.array();
+    points.colwise() += v0;
 }
 
 template < typename Derived0, typename Derived1, typename Derived2 >
@@ -441,92 +444,101 @@ static typename Derived0::Scalar angle_from_3_points(
 
 template < typename Derived0, typename Derived1 >
 static bool is_inside_polygon(
-        const Eigen::MatrixBase<Derived0> &polygonPixels,
-        const Eigen::MatrixBase<Derived1> &pixel ) {
+        const Eigen::MatrixBase<Derived0> &polygonPoints,
+        const Eigen::MatrixBase<Derived1> &point ) {
     typedef typename Derived0::Scalar Real_t;
 
     const auto pi = boost::math::constants::pi<Real_t>();
-    const auto pixel2 = pixel.block(0, 0, 2, 1);
+    const auto point2 = point.block(0, 0, 2, 1);
 
     auto acc = static_cast<Real_t>(0);
 
-    const int N = polygonPixels.cols();
+    const int N = polygonPoints.cols();
 
     for ( int i = 0; i < N - 1; ++i ) {
         acc += angle_from_3_points(
-                polygonPixels.block(0,   i, 2, 1),
-                polygonPixels.block(0, i+1, 2, 1),
-                pixel2 );
+                polygonPoints.block(0,   i, 2, 1),
+                polygonPoints.block(0, i+1, 2, 1),
+                point2 );
     }
 
     acc += angle_from_3_points(
-            polygonPixels.block(0, N-1, 2, 1),
-            polygonPixels.block(0,   0, 2, 1),
-            pixel2 );
+            polygonPoints.block(0, N-1, 2, 1),
+            polygonPoints.block(0,   0, 2, 1),
+            point2 );
 
     return std::abs(acc) > 1.9 * pi;
 }
 
 template < typename rT >
-static void find_in_polygon_pixels(
-        const Eigen::MatrixX<rT> &pixels,
-        const Eigen::MatrixX<rT> &polygonPixels,
-        Eigen::MatrixX<rT> &insidePolygonPixels ) {
-    const int rows = pixels.rows();
+static void find_in_polygon_points(
+        const Eigen::MatrixX<rT> &points,
+        const Eigen::MatrixX<rT> &polygonPoints,
+        Eigen::MatrixX<rT> &insidePolygonPoints ) {
+    const int rows = points.rows();
     assert( 2 == rows || 3 == rows );
 
-    std::vector<rT> vInsidePolygonPixels;
+    std::vector<rT> vInsidePolygonPoints;
 
-    const int N = pixels.cols();
+    const int N = points.cols();
 
     if ( 3 == rows ) {
         for ( int i = 0; i < N; ++i ) {
-            // Test if the current pixel is in side the polygon.
-//            Eigen::MatrixX<rT> tempCol = pixels.col(i);
-            if ( is_inside_polygon(polygonPixels, pixels.col(i)) ) {
-                vInsidePolygonPixels.push_back( pixels(0, i) );
-                vInsidePolygonPixels.push_back( pixels(1, i) );
-                vInsidePolygonPixels.push_back( pixels(2, i) );
+            // Test if the current cell is in side the polygon.
+            if ( is_inside_polygon(polygonPoints, points.col(i)) ) {
+                vInsidePolygonPoints.push_back( points(0, i) );
+                vInsidePolygonPoints.push_back( points(1, i) );
+                vInsidePolygonPoints.push_back( points(2, i) );
             }
         }
     } else {
         for ( int i = 0; i < N; ++i ) {
-            // Test if the current pixel is in side the polygon.
-//            Eigen::MatrixX<rT> tempCol = pixels.col(i);
-            if ( is_inside_polygon(polygonPixels, pixels.col(i)) ) {
-                vInsidePolygonPixels.push_back( pixels(0, i) );
-                vInsidePolygonPixels.push_back( pixels(1, i) );
+            // Test if the current cell is in side the polygon.
+            if ( is_inside_polygon(polygonPoints, points.col(i)) ) {
+                vInsidePolygonPoints.push_back( points(0, i) );
+                vInsidePolygonPoints.push_back( points(1, i) );
             }
         }
     }
 
-    insidePolygonPixels = Eigen::Map< Eigen::MatrixX<rT> >(
-            vInsidePolygonPixels.data(), rows, vInsidePolygonPixels.size()/rows );
+    insidePolygonPoints = Eigen::Map< Eigen::MatrixX<rT> >(
+            vInsidePolygonPoints.data(), rows, vInsidePolygonPoints.size()/rows );
 }
 
 template < typename rT >
-static void collect_filled_points_3d(
+static void collect_output_points(
         const Eigen::MatrixX<rT> &filled,
         const Eigen::MatrixXi &inFlagMap,
-        int shiftX, int shiftY,
-        const Eigen::MatrixX<rT> &boundaryPixels,
-        const CameraProjection<rT> &camProj,
-        Eigen::MatrixX<rT> &filled3D ) {
-    // Find all the filled pixels that are not MVS pixels.
-    Eigen::MatrixX<rT> nonMVSPixels;
-    find_non_mvs_pixels( filled, inFlagMap, nonMVSPixels );
+        const Eigen::MatrixX<rT> &boundaryPoints,
+        const Eigen::Vector4<rT> &gridDef,
+        Eigen::MatrixX<rT> &output,
+        Eigen::MatrixX<rT> &nonMVSPoints) {
+    // Find all the cells that are not MVS cells.
+    Eigen::MatrixX<rT> nonMVSCells;
+    find_non_mvs_cells( filled, inFlagMap, nonMVSCells );
 
-    // Shift the pixel coordinates according to shiftX and shiftY.
-    Eigen::Vector3<rT> shift;
-    shift << static_cast<rT>(shiftX), static_cast<rT>(shiftY), static_cast<rT>(0);
-    nonMVSPixels.colwise() += shift;
+    // Test use.
+    std::cout << "nonMVSCells.cols() = " << nonMVSCells.cols() << std::endl;
 
-    // Find the pixels in side the boundary polygon.
-    Eigen::MatrixX<rT> insidePolygonPixels;
-    find_in_polygon_pixels( nonMVSPixels, boundaryPixels, insidePolygonPixels );
+    // Covert the cells to the points.
+    convert_cells_2_points(nonMVSCells, gridDef, nonMVSPoints);;
 
-    // Project the pixels back to the world frame.
-    camProj.pixel_2_world( insidePolygonPixels, filled3D );
+    // Find the cells inside the boundary polygon.
+    find_in_polygon_points( nonMVSPoints, boundaryPoints, output );
+
+    // Test use.
+    std::cout << "output.cols() = " << output.cols() << std::endl;
+}
+
+template < typename rT >
+static void write_points_as_pcl( const std::string& fn,
+                                 const Eigen::MatrixX<rT> &points ) {
+    // Convert.
+    pcl::PointCloud<pcl::PointXYZ>::Ptr pPC =
+            pcu::convert_eigen_matrix_2_pcl_xyz(points);
+
+    // Write.
+    pcu::write_point_cloud<pcl::PointXYZ>(fn, pPC);
 }
 
 class Args
@@ -551,6 +563,10 @@ public:
             flag = false;
         }
 
+        if ( cellDim[0] <= 0 || cellDim[1] <= 0 ) {
+            flag = false;
+        }
+
         return flag;
     }
 
@@ -563,6 +579,7 @@ public:
         out << Args::AS_F_MVS << ": " << args.fMVS << std::endl;
         out << Args::AS_F_LIDAR << ": " << args.fLiDAR << std::endl;
         out << Args::AS_F_PRIOR << ": " << args.fPrior << std::endl;
+        out << Args::AS_CELL_DIM << ": [ " << args.cellDim[0] << ", " << args.cellDim[1] << " ]" << std::endl;
 
         return out;
     }
@@ -576,6 +593,7 @@ public:
     static const std::string AS_F_MVS;
     static const std::string AS_F_LIDAR;
     static const std::string AS_F_PRIOR;
+    static const std::string AS_CELL_DIM;
 
 public:
     std::string inParam; // The input file of the parameters.
@@ -586,6 +604,7 @@ public:
     double fMVS; // Cost factor.
     double fLiDAR;
     double fPrior;
+    std::vector<double> cellDim; // The x,y-length of the grid cell.
 };
 
 const std::string Args::AS_IN_PARAM = "inParam";
@@ -596,8 +615,11 @@ const std::string Args::AS_OUR_DIR  = "outDir";
 const std::string Args::AS_F_MVS    = "f-mvs";
 const std::string Args::AS_F_LIDAR  = "f-lidar";
 const std::string Args::AS_F_PRIOR  = "f-prior";
+const std::string Args::AS_CELL_DIM = "cell-dim";
 
 static void parse_args(int argc, char* argv[], Args& args) {
+
+    std::string cellDimString;
 
     try
     {
@@ -611,7 +633,8 @@ static void parse_args(int argc, char* argv[], Args& args) {
                 (Args::AS_OUR_DIR.c_str(), bpo::value< std::string >(&args.outDir)->required(), "The output file. ")
                 (Args::AS_F_MVS.c_str(), bpo::value< double >(&args.fMVS)->default_value(1.0), "The cost factor for MVS point.")
                 (Args::AS_F_LIDAR.c_str(), bpo::value< double >(&args.fLiDAR)->default_value(1.0), "The cost factor for LiDAR point.")
-                (Args::AS_F_PRIOR.c_str(), bpo::value< double >(&args.fPrior)->default_value(1.0), "The cost factor for prior.");
+                (Args::AS_F_PRIOR.c_str(), bpo::value< double >(&args.fPrior)->default_value(1.0), "The cost factor for prior.")
+                (Args::AS_CELL_DIM.c_str(), bpo::value< std::string >(&cellDimString)->default_value("0.1, 0.1"), "The size of one cell grid.");
 
         bpo::positional_options_description posOptDesc;
         posOptDesc.add(Args::AS_IN_PARAM.c_str(), 1
@@ -631,20 +654,11 @@ static void parse_args(int argc, char* argv[], Args& args) {
         throw(e);
     }
 
+    args.cellDim = extract_number_from_string<double>( cellDimString, 2 );
+
     if ( !args.validate() ) {
         EXCEPTION_INVALID_ARGUMENTS(args)
     }
-}
-
-template < typename rT >
-static void write_points_as_pcl( const std::string& fn,
-        const Eigen::MatrixX<rT> &points ) {
-    // Convert.
-    pcl::PointCloud<pcl::PointXYZ>::Ptr pPC =
-            pcu::convert_eigen_matrix_2_pcl_xyz(points);
-
-    // Write.
-    pcu::write_point_cloud<pcl::PointXYZ>(fn, pPC);
 }
 
 int main( int argc, char** argv ) {
@@ -660,55 +674,91 @@ int main( int argc, char** argv ) {
     // Read the input parameters from the JSON file.
     std::shared_ptr<JSON> pParams = read_json( args.inParam );
 
-    // Create the CameraProjection object.
-    auto pCamProj = json_2_camera_projection<float>( *pParams );
-    std::cout << "pCamProj = " << std::endl;
-    std::cout << *pCamProj << std::endl;
+    typedef pcl::PointXYZ P_t;
 
-    // Read the tables for MVS points, LiDAr points and boundary pixels.
-    Eigen::MatrixXf tableMVS, tableLiDAR, tableBoundaryPixels;
-    read_npy_2_eigen_matrix( args.inMVS, tableMVS );
-    read_npy_2_eigen_matrix( args.inLiDAR, tableLiDAR );
-    read_npy_2_eigen_matrix( args.inBP, tableBoundaryPixels );
+    // Read the MVS points, LiDAr points and boundary points.
+    pcl::PointCloud<P_t>::Ptr pMVS   = pcu::read_point_cloud<P_t>(args.inMVS);
+    pcl::PointCloud<P_t>::Ptr pLiDAR = pcu::read_point_cloud<P_t>(args.inLiDAR);
+    pcl::PointCloud<P_t>::Ptr pBP    = pcu::read_point_cloud<P_t>(args.inBP);
 
-    assert( 3 == tableMVS.cols() );
-    assert( 3 == tableLiDAR.cols() );
-    assert( 3 == tableBoundaryPixels.cols() );
+    // Compute the oriented bounding box.
+    P_t bbMinPoint, bbMaxPoint, bbPosition;
+    Eigen::Matrix3f bbRotMat;
+    pcu::get_obb<P_t>( pMVS, bbMinPoint, bbMaxPoint, bbPosition, bbRotMat );
+
+    // Test use.
+    std::cout << "bbMinPoint = " << bbMinPoint << std::endl;
+    std::cout << "bbMaxPoint = " << bbMaxPoint << std::endl;
+    std::cout << "bbRotMat = " << std::endl << bbRotMat << std::endl;
+
+    // Check if the bounding box's frame has its xy plane aligned with the point cloud.
+    assert( bbMaxPoint.x - bbMinPoint.x > bbMaxPoint.z - bbMinPoint.z );
+    assert( bbMaxPoint.y - bbMinPoint.y > bbMaxPoint.z - bbMinPoint.z );
+
+    // Transform the point clouds to the frame of the bounding box.
+    pcl::PointCloud<P_t>::Ptr pTransMVS =
+            pcu::transform_point_cloud<P_t, float>( pMVS, bbPosition, bbRotMat );
+    pcl::PointCloud<P_t>::Ptr pTransLiDAR =
+            pcu::transform_point_cloud<P_t, float>( pLiDAR, bbPosition, bbRotMat );
+    pcl::PointCloud<P_t>::Ptr pTransBP =
+            pcu::transform_point_cloud<P_t, float>( pBP, bbPosition, bbRotMat );
+
+    // Convert the point clouds to Eigen matrices.
+    Eigen::MatrixXf pointsMVS, pointsLiDAR, pointsBP;
+    pcu::convert_pcl_2_eigen_matrix<P_t, float>(pTransMVS, pointsMVS);
+    pcu::convert_pcl_2_eigen_matrix<P_t, float>(pTransLiDAR, pointsLiDAR);
+    pcu::convert_pcl_2_eigen_matrix<P_t, float>(pTransBP, pointsBP);
 
     // Build the initial depth map as an Eigen matrix.
     Eigen::MatrixXf initialDepthMap;
     Eigen::MatrixXi flagMap;
 
-    make_initial_depth_map( *pCamProj, tableMVS, tableLiDAR, initialDepthMap, flagMap );
+    // Use the bounding box. Fill in MVS and LiDAR points. Get the flags.
+    Eigen::Vector4f xyLimits;
+    xyLimits << bbMinPoint.x, bbMinPoint.y, bbMaxPoint.x, bbMaxPoint.y;
 
-    // Find the bounding box on the pixel plane.
-    int x0, y0, x1, y1;
-    get_image_plane_bbox( initialDepthMap, x0, y0, x1, y1 );
+    // Test use.
+    std::cout << "xyLimits = " << xyLimits << std::endl;
 
-    std::cout << "[ x0, y0, x1, y1 ] = [ "
-              << x0 << ", " << y0 << ", "
-              << x1 << ", " << y1 << " ]. " << std::endl;
+    Eigen::Vector4f gridDef;
+    make_initial_depth_plane(
+            static_cast<float>( args.cellDim[0] ), static_cast<float>( args.cellDim[1] ),
+            xyLimits, pointsMVS, pointsLiDAR, initialDepthMap, flagMap, gridDef );
 
-    // Crop the initial depth image.
-    Eigen::MatrixXf croppedDepthMap = initialDepthMap.block( y0, x0, (y1-y0+1), (x1-x0+1) );
-    Eigen::MatrixXi croppedFlagMap  = flagMap.block( y0, x0, (y1-y0+1), (x1-x0+1) );
+    // Test use.
+    std::cout << "Initial map dimension: " << initialDepthMap.rows() << ", "
+              << initialDepthMap.cols() << ". " << std::endl;
 
-    // Compute the average depth as the initial guess.
-    Eigen::MatrixXf initialGuess;
-    get_average_initial_guess( croppedDepthMap, croppedFlagMap, initialGuess );
+    // Use zero as the initial guess.
+    Eigen::MatrixXf initialGuess = Eigen::MatrixXf::Zero(
+            initialDepthMap.rows(), initialDepthMap.cols() );
 
     // Fill the missing depth.
-    Eigen::MatrixXf croppedFilled;
-    fill_depth_map( croppedDepthMap, initialGuess, croppedFlagMap, croppedFilled,
+    Eigen::MatrixXf filled;
+    fill_depth_map( initialDepthMap, initialGuess, flagMap, filled,
             args.fMVS, args.fLiDAR, args.fPrior );
-    // Test only.
-//    croppedFilled = croppedDepthMap;
 
-    // Get the filled 3D points.
-    Eigen::MatrixXf filled3D;
-    Eigen::MatrixXf boundaryPixelMatrix = tableBoundaryPixels.transpose();
-    collect_filled_points_3d( croppedFilled, croppedFlagMap, x0, y0,
-            boundaryPixelMatrix, *pCamProj, filled3D );
+    // Get the points in the polygon.
+    Eigen::MatrixXf inPolygon, nonMVSPoints;
+    collect_output_points( filled, flagMap, pointsBP, gridDef, inPolygon, nonMVSPoints );
+
+    // Convert back to PCL point clouds.
+    pcl::PointCloud<P_t>::Ptr inPolygonPC =
+            pcu::convert_eigen_matrix_2_pcl_xyz<P_t, float>(inPolygon);
+
+    // Test use.
+    pcl::PointCloud<P_t>::Ptr nonMVSPC =
+            pcu::convert_eigen_matrix_2_pcl_xyz<P_t, float>(nonMVSPoints);
+
+    // Transform the point clouds back to the original frame.
+    Eigen::Matrix4f tsLocal2World =
+            pcu::create_eigen_transform_matrix_0( bbPosition, bbRotMat );
+    pcl::PointCloud<P_t>::Ptr filledPC =
+            pcu::transform_point_cloud<P_t>( inPolygonPC, tsLocal2World );
+
+    // Test use.
+    pcl::PointCloud<P_t>::Ptr nonMVSPCWorld =
+            pcu::transform_point_cloud<P_t>( nonMVSPC, tsLocal2World );
 
     // Test output directory.
     test_directory(args.outDir);
@@ -716,13 +766,11 @@ int main( int argc, char** argv ) {
     {
         // Write filled3D matrix as PCL point cloud.
         std::string outFn = args.outDir + "/Filled3D.ply";
-        write_points_as_pcl( outFn, filled3D );
-    }
+        pcu::write_point_cloud<P_t>( outFn, filledPC );
 
-    {
-        // Write the cropped filled image to a NumPy file.
-        std::string outFn = args.outDir + "/CroppedFilledImg.npy";
-        write_eigen_matrix_2_npy(outFn, croppedFilled);
+        // Test use.
+        outFn = args.outDir + "/NonMVSPCWorld.ply";
+        pcu::write_point_cloud<P_t>( outFn, nonMVSPCWorld );
     }
 
     QUICK_TIME_END(te)

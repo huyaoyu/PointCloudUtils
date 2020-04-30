@@ -13,6 +13,7 @@
 #include <pcl/io/ply_io.h>
 #include <pcl/point_types.h>
 
+#include "common.hpp"
 #include "Profiling/SimpleTime.hpp"
 
 namespace pcu {
@@ -52,6 +53,13 @@ void read_point_cloud(const std::string &fn, typename pcl::PointCloud<T>::Ptr &p
     QUICK_TIME_END(teReadPointCloud);
 
     std::cout << pOutCloud->size() << " points loaded in " << teReadPointCloud << "ms. " << std::endl;
+}
+
+template < typename pT, typename rT >
+void read_point_cloud_xyz_as_eigen_matrix( const std::string &fn,
+        Eigen::MatrixX<rT> &mat ) {
+    typename pcl::PointCloud<pT>::Ptr pCloud = read_point_cloud<pT>(fn);
+    convert_pcl_2_eigen_matrix<pT, rT>(pCloud, mat);
 }
 
 template < typename pT >

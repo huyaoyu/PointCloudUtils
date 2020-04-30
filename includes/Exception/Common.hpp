@@ -13,10 +13,18 @@
 #include <boost/exception/all.hpp>
 
 struct exception_common_base    : virtual std::exception, virtual boost::exception { };
+struct not_implemented          : virtual exception_common_base {};
 struct file_not_good            : virtual exception_common_base {};
 struct eigen_row_major          : virtual exception_common_base {};
 
 typedef boost::error_info<struct tag_info_string, std::string> ExceptionInfoString;
+
+#define EXCEPTION_NOT_IMPLEMENTED(name) \
+    {\
+        std::stringstream name##_ss; \
+        name##_ss << #name << " is not implemented. "; \
+        BOOST_THROW_EXCEPTION( not_implemented() << ExceptionInfoString(name##_ss.str()) ); \
+    }
 
 #define EXCEPTION_FILE_NOT_GOOD(fn) \
     {\

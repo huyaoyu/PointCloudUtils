@@ -39,18 +39,18 @@ void convert_pcl_2_eigen_matrix(
     }
 }
 
-template < typename rT >
-pcl::PointCloud<pcl::PointXYZ>::Ptr convert_eigen_matrix_2_pcl_xyz(
+template < typename pT, typename rT >
+typename pcl::PointCloud<pT>::Ptr convert_eigen_matrix_2_pcl_xyz(
         const Eigen::MatrixX<rT> &mat ) {
     const std::size_t N = mat.cols();
 
     assert( N > 0 );
 
-    pcl::PointCloud<pcl::PointXYZ>::Ptr pOutput ( new pcl::PointCloud<pcl::PointXYZ> );
+    typename pcl::PointCloud<pT>::Ptr pOutput ( new pcl::PointCloud<pT> );
     pOutput->resize( N );
 
     for ( std::size_t i = 0; i < N; ++i ) {
-        pcl::PointXYZ p;
+        pT p;
         p.x = mat(0, i);
         p.y = mat(1, i);
         p.z = mat(2, i);

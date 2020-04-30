@@ -48,8 +48,18 @@ using JSON = nlohmann::json;
         BOOST_THROW_EXCEPTION( id_not_found() << ExceptionInfoString(id##_ss.str()) );\
     }
 
+#define EXCEPTION_NO_CAM_PROJ(id) \
+    {\
+        std::stringstream id##_ss;\
+        id##_ss << "ID " \
+                << id << " has haveCamProj = false.";\
+        BOOST_THROW_EXCEPTION( no_cam_proj() << ExceptionInfoString(id##_ss.str()) );\
+    }
+
 // Exception definitions.
-struct id_not_found  : virtual exception_common_base {};
+struct ex_comp_data_gen : virtual exception_common_base {};
+struct id_not_found     : virtual ex_comp_data_gen {};
+struct no_cam_proj      : virtual ex_comp_data_gen {};
 
 class Args
 {
@@ -60,11 +70,6 @@ public:
 
     bool validate() {
         bool flag = true;
-
-        if ( -1 == holeID ) {
-            flag = false;
-            std::cout << "Currently only support single hole processing. " << std::endl;
-        }
 
         if ( camScale <= 0 ) {
             flag = false;
@@ -153,6 +158,58 @@ static void parse_args(int argc, char* argv[], Args& args) {
 }
 
 template < typename rT >
+static std::shared_ptr< pcu::HoleBoundaryPoints<rT> > retrieve_hbp( const JSON &json, const int idx ) {
+    const auto& hbp = json["hpp"][idx];
+
+    std::shared_ptr< pcu::HoleBoundaryPoints<rT> > pHBP (new pcu::HoleBoundaryPoints<rT>);
+
+    // Fill in the values.
+    // id.
+    pHBP->id = hbp["id"];
+
+    // polygonIndices.
+    pHBP->polygonIndices.resize( hbp["polygonIndices"].size() );
+    std::copy( hbp["polygonIndices"].begin(), hbp["polygonIndices"].end(), pHBP->polygonIndices.begin() );
+
+    // equivalentNormal.
+    pcl::PointNormal pn;
+    pn.x = hbp["centroid"][0];
+    pn.y = hbp["centroid"][1];
+    pn.z = hbp["centroid"][2];
+    pn.normal_x = hbp["normal"][0];
+    pn.normal_y = hbp["normal"][1];
+    pn.normal_z = hbp["normal"][2];
+    pn.curvature = hbp["curvature"];
+    pHBP->equivalentNormal = pn;
+
+    if ( hbp["haveCamProj"] ) {
+        // CameraProjection.
+        CameraProjection<rT> cp;
+        const auto& camProj = hbp["camProj"];
+
+        cp.id     = camProj["id"];
+        cp.height = camProj["height"];
+        cp.width  = camProj["width"];
+
+        convert_vector_2_eigen_mat3( camProj["K"].get< std::vector<rT> >(), cp.K );
+        convert_vector_2_eigen_mat3( camProj["RC"].get< std::vector<rT> >(), cp.RC );
+        convert_vector_2_eigen_mat3( camProj["R"].get< std::vector<rT> >(), cp.R );
+        convert_vector_2_eigen_vector( camProj["T"].get< std::vector<rT> >(), cp.T );
+
+//        Eigen::Vector4<rT> qv;
+//        convert_vector_2_eigen_vector( camProj["T"].get< std::vector<rT> >(), qv );
+
+        std::vector<rT> qv = camProj["Q"].get< std::vector<rT> >();
+
+        cp.Q = Eigen::Quaternion<rT>( qv[0], qv[1], qv[2], qv[3] );
+
+        pHBP->pCamProj = std::make_shared<CameraProjection<rT>>( cp );
+    }
+
+    return pHBP;
+}
+
+template < typename rT >
 static std::shared_ptr< pcu::HoleBoundaryPoints<rT> > find_boundary_polygon(
         const JSON &json, const int id ) {
 
@@ -176,52 +233,7 @@ static std::shared_ptr< pcu::HoleBoundaryPoints<rT> > find_boundary_polygon(
     }
 
     // id found.
-    const auto& hbp = hpp[idFound];
-
-    std::shared_ptr< pcu::HoleBoundaryPoints<rT> > pHBP (new pcu::HoleBoundaryPoints<rT>);
-
-    // Fill in the values.
-    // id.
-    pHBP->id = id;
-
-    // polygonIndices.
-    pHBP->polygonIndices.resize( hbp["polygonIndices"].size() );
-    std::copy( hbp["polygonIndices"].begin(), hbp["polygonIndices"].end(), pHBP->polygonIndices.begin() );
-
-    // equivalentNormal.
-    pcl::PointNormal pn;
-    pn.x = hbp["centroid"][0];
-    pn.y = hbp["centroid"][1];
-    pn.z = hbp["centroid"][2];
-    pn.normal_x = hbp["normal"][0];
-    pn.normal_y = hbp["normal"][1];
-    pn.normal_z = hbp["normal"][2];
-    pn.curvature = hbp["curvature"];
-    pHBP->equivalentNormal = pn;
-
-    // CameraProjection.
-    CameraProjection<rT> cp;
-    const auto& camProj = hbp["camProj"];
-
-    cp.id     = camProj["id"];
-    cp.height = camProj["height"];
-    cp.width  = camProj["width"];
-
-    convert_vector_2_eigen_mat3( camProj["K"].get< std::vector<rT> >(), cp.K );
-    convert_vector_2_eigen_mat3( camProj["RC"].get< std::vector<rT> >(), cp.RC );
-    convert_vector_2_eigen_mat3( camProj["R"].get< std::vector<rT> >(), cp.R );
-    convert_vector_2_eigen_vector( camProj["T"].get< std::vector<rT> >(), cp.T );
-
-//    Eigen::Vector4<rT> qv;
-//    convert_vector_2_eigen_vector( camProj["T"].get< std::vector<rT> >(), qv );
-
-    std::vector<rT> qv = camProj["Q"].get< std::vector<rT> >();
-
-    cp.Q = Eigen::Quaternion<rT>( qv[0], qv[1], qv[2], qv[3] );
-
-    pHBP->camProj = cp;
-
-    return pHBP;
+    return retrieve_hbp<rT>(json, idFound);
 }
 
 template < typename pT, typename rT >
@@ -302,7 +314,7 @@ static void shift_bbox_borders_metric( pT &minPoint, pT &maxPoint, float s ) {
 }
 
 template < typename pT, typename rT >
-static void make_depth_map(
+static void make_depth_map_with_camera(
         const typename pcl::PointCloud<pT>::Ptr pInput,
         const CameraProjection<rT> &camProj,
         Eigen::MatrixX<rT> &depth ) {
@@ -391,7 +403,7 @@ static void make_depth_map(
 }
 
 template < typename pT, typename rT >
-static void write_cropped_depth_info(
+static void write_cropped_depth_info_with_camera(
         const typename pcl::PointCloud<pT>::Ptr pInput,
         const pcl::PointXYZ &obbMinPoint,
         const pcl::PointXYZ &obbMaxPoint,
@@ -400,14 +412,19 @@ static void write_cropped_depth_info(
         const CameraProjection<rT> &camProj,
         const std::string &outDir,
         const std::string &prefix ) {
-    // Crop out the points from MVSO in the oriented bounding box.
+    // Crop out the points from input point cloud in the oriented bounding box.
     typename pcl::PointCloud<pT>::Ptr pCropped =
             pcu::crop_by_oriented_bbox<pT, rT>( pInput,
                     obbMinPoint, obbMaxPoint, obbPosition, obbRotMat );
 
-    // Make a depth map for the MVSO.
+    if ( pCropped->size() == 0 ) {
+        std::cout << "Cropped 0 points. " << std::endl;
+        return;
+    }
+
+    // Make a depth map for the point cloud.
     Eigen::MatrixX<rT> depthCropped;
-    make_depth_map<pT, rT>( pCropped, camProj, depthCropped );
+    make_depth_map_with_camera<pT, rT>(pCropped, camProj, depthCropped);
 
     // Save the matrix as a float image.
     std::string mvsoDepthImgFn = outDir + "/" + prefix + "_DepthImg.png";
@@ -445,75 +462,67 @@ static void write_json( const std::string &fn,
     ofs << std::endl << "}";
 }
 
-int main( int argc, char* argv[] ) {
-    std::cout << "Hello, HoleDepthCompletionDataGeneration! " << std::endl;
+template < typename rT >
+static void write_json( const std::string &fn,
+                        const std::shared_ptr<pcu::HoleBoundaryPoints<rT>> pHBP ) {
+    std::ofstream ofs(fn);
 
-    // Handle the command line.
-    MAIN_COMMON_LINES(argc, argv, args)
-
-    // The output directory with the hole ID.
-    std::stringstream ssOutDir;
-    ssOutDir << args.outDir << "/" << args.holeID;
-    std::string outDir = ssOutDir.str();
-
-    // Test the output directory.
-    test_directory(outDir);
-
-    // Read the hole boundary projection/polygon JSON file,
-    // find and create a HoleBoundaryPoints object according to the specified ID.
-    std::shared_ptr<JSON> pJson = read_json( args.inHoleProj );
-
-    auto pHBP = std::make_shared<pcu::HoleBoundaryPoints<float>>( );
-
-    try {
-        pHBP = find_boundary_polygon<float>( *pJson, args.holeID );
-    } catch ( id_not_found &ex ) {
-        std::cout << EXCEPTION_DIAG_INFO(ex) << std::endl;
-        std::cout << "ID " << args.holeID << " not found. Abort! " << std::endl;
-        return 1;
-    } catch ( ... ) {
-        std::cout << "Unknown error! " << std::endl;
-        return 1;
+    if ( !ofs.good() ) {
+        EXCEPTION_FILE_NOT_GOOD(fn)
     }
 
-    // Test use.
-    std::cout << "pHBP: " << std::endl;
-    std::cout << *pHBP << std::endl;
+    const std::string TAB = "    ";
 
+    ofs << "{" << std::endl;
+
+    ofs << TAB << "\"boundaryId\": " << pHBP->id << "," << std::endl;
+    ofs << TAB << "\"centroid\": [ "
+        << pHBP->equivalentNormal.x << ", "
+        << pHBP->equivalentNormal.y << ", "
+        << pHBP->equivalentNormal.z << " ]"
+        << "," << std::endl;
+    ofs << TAB << "\"normal\": [ "
+        << pHBP->equivalentNormal.normal_x << ", "
+        << pHBP->equivalentNormal.normal_y << ", "
+        << pHBP->equivalentNormal.normal_z << " ],"
+        << std::endl;
+    ofs << TAB << "\"curvature\": "
+        << pHBP->equivalentNormal.curvature
+        << std::endl;
+
+    ofs << "}";
+}
+
+template < typename pT, typename rT >
+static void generate_data_with_camera(const Args &args,
+        const std::string &outDir,
+        const typename pcl::PointCloud<pT>::Ptr pBoundary,
+        const typename pcl::PointCloud<pT>::Ptr pMVS,
+        const typename pcl::PointCloud<pT>::Ptr pLiDAR,
+        const std::vector<std::string> &outputPrefix,
+        const std::shared_ptr<pcu::HoleBoundaryPoints<rT>> pHBP) {
     // Make a copy of the CameraProjection object.
-    CameraProjection<float> scaledCamProj( pHBP->camProj );
+    CameraProjection<rT> scaledCamProj( *(pHBP->pCamProj) );
 
     // Scale the camera intrinsics.
     scaledCamProj.scale_intrinsics(args.camScale);
 
-    // Test use.
-    std::cout << "scaledCampProj = " << std::endl;
-    std::cout << scaledCamProj << std::endl;
-
-    // Load MVSB.
-    pcl::PointCloud<pcl::PointXYZ>::Ptr pMVSB =
-            pcu::read_point_cloud<pcl::PointXYZ>( args.inMVSBoundary );
-
-    // Extract the boundary points.
-    pcl::PointCloud<pcl::PointXYZ>::Ptr pBoundary =
-            pcu::extract_points<pcl::PointXYZ, int>( pMVSB, pHBP->polygonIndices );
-
-    // Save the boundary points for future process.
-    std::string boundaryPointsFn = outDir + "/BoundaryPoints.ply";
-    pcu::write_point_cloud<pcl::PointXYZ>( boundaryPointsFn, pBoundary );
+//    // Test use.
+//    std::cout << "scaledCampProj = " << std::endl;
+//    std::cout << scaledCamProj << std::endl;
 
     // Project the boundary points to the 2D pixel plane.
-    Eigen::MatrixXf boundaryPixels;
-    project_pcl_points_2_pixel_plane<pcl::PointXYZ, float>(
+    Eigen::MatrixX<rT> boundaryPixels;
+    project_pcl_points_2_pixel_plane<pT, rT>(
             pBoundary, scaledCamProj, boundaryPixels );
 
     // Find the 2D bounding box in the pixel plane.
-    float bx0, by0, bx1, by1;
+    rT bx0, by0, bx1, by1;
     find_bounding_box_pixel_plane( boundaryPixels, bx0, by0, bx1, by1 );
 
     // Save the boundary pixels.
     std::string boundaryPixelFn = outDir + "/BoundaryPixels.npy";
-    Eigen::MatrixXf boundaryPixelTable = boundaryPixels.transpose();
+    Eigen::MatrixX<rT> boundaryPixelTable = boundaryPixels.transpose();
     write_eigen_matrix_2_npy( boundaryPixelFn, boundaryPixelTable);
 
     // Test use.
@@ -523,34 +532,188 @@ int main( int argc, char* argv[] ) {
 
     // Compute the oriented bounding box of the boundary points.
     pcl::PointXYZ obbMinPoint, obbMaxPoint, obbPosition;
-    Eigen::Matrix3f obbRotMat;
-    pcu::get_obb<pcl::PointXYZ>(pBoundary, obbMinPoint, obbMaxPoint, obbPosition, obbRotMat);
+    Eigen::Matrix3<rT> obbRotMat;
+    pcu::get_obb<pT>(pBoundary, obbMinPoint, obbMaxPoint, obbPosition, obbRotMat);
 
     // Enlarge the b-box a little bit.
     shift_bbox_borders_metric( obbMinPoint, obbMaxPoint, 0.02 );
 
-    std::vector<std::string> inputCloudFn = { args.inMVSOriginal, args.inLiDAR };
-    std::vector<std::string> outputPrefix = { "MVSO", "LiDAR" };
+    // Write depth info.
+    write_cropped_depth_info_with_camera<pT, rT>(
+            pMVS,
+            obbMinPoint, obbMaxPoint, obbPosition, obbRotMat,
+            scaledCamProj, outDir, outputPrefix[0]);
 
-    const int N = inputCloudFn.size();
+    write_cropped_depth_info_with_camera<pT, rT>(
+            pLiDAR,
+            obbMinPoint, obbMaxPoint, obbPosition, obbRotMat,
+            scaledCamProj, outDir, outputPrefix[1]);
 
-    for ( int i = 0; i < N; ++i ) {
-        std::cout << "Process " << inputCloudFn[i] << std::endl;
+    // Write the JSON file.
+    std::string jsonFn = outDir + "/DepthCompletion.json";
+    write_json( jsonFn, pHBP->id, args.camScale, *(pHBP->pCamProj) );
+}
 
-        // Load point cloud.
-        pcl::PointCloud<pcl::PointXYZ>::Ptr pPointCloud =
-                pcu::read_point_cloud<pcl::PointXYZ>( inputCloudFn[i] );
+template < typename pT, typename rT >
+static void generate_data_without_camera(const Args &args,
+                      const std::string &outDir,
+                      const typename pcl::PointCloud<pT>::Ptr pBoundary,
+                      const typename pcl::PointCloud<pT>::Ptr pMVS,
+                      const typename pcl::PointCloud<pT>::Ptr pLiDAR,
+                      const std::vector<std::string> &outputPrefix,
+                      const std::shared_ptr<pcu::HoleBoundaryPoints<rT>> pHBP) {
+    // Compute the oriented bounding box of the boundary points.
+    pcl::PointXYZ obbMinPoint, obbMaxPoint, obbPosition;
+    Eigen::Matrix3f obbRotMat;
+    pcu::get_obb<pT>(pBoundary, obbMinPoint, obbMaxPoint, obbPosition, obbRotMat);
 
-        // Write depth info.
-        write_cropped_depth_info<pcl::PointXYZ, float>(
-                pPointCloud,
-                obbMinPoint, obbMaxPoint, obbPosition, obbRotMat,
-                scaledCamProj, outDir, outputPrefix[i] );
+    // Enlarge the b-box a little bit.
+    shift_bbox_borders_metric( obbMinPoint, obbMaxPoint, 0.02 );
+
+    // Crop out the points from input point cloud in the oriented bounding box.
+    typename pcl::PointCloud<pT>::Ptr pCropped =
+            pcu::crop_by_oriented_bbox<pT, rT>( pMVS,
+                    obbMinPoint, obbMaxPoint, obbPosition, obbRotMat );
+
+    if ( pCropped->size() > 0 ) {
+        std::string croppedFn = outDir + "/" + outputPrefix[0] + "_Cropped.ply";
+        pcu::write_point_cloud<pT>( croppedFn, pCropped );
+    } else {
+        std::cout << "MVS point cropped 0 points! " << std::endl;
+    }
+
+    // Crop out the points from input point cloud in the oriented bounding box.
+    pCropped = pcu::crop_by_oriented_bbox<pT, rT>( pLiDAR,
+                    obbMinPoint, obbMaxPoint, obbPosition, obbRotMat );
+
+    if ( pCropped->size() > 0 ) {
+        std::string croppedFn = outDir + "/" + outputPrefix[1] + "_Cropped.ply";
+        pcu::write_point_cloud<pT>( croppedFn, pCropped );
+    } else {
+        std::cout << "LiDAR point cropped 0 points! " << std::endl;
     }
 
     // Write the JSON file.
     std::string jsonFn = outDir + "/DepthCompletion.json";
-    write_json( jsonFn, pHBP->id, args.camScale, pHBP->camProj );
+    write_json( jsonFn, pHBP );
+}
+
+int main( int argc, char* argv[] ) {
+    std::cout << "Hello, HoleDepthCompletionDataGeneration! " << std::endl;
+
+    // Handle the command line.
+    MAIN_COMMON_LINES(argc, argv, args)
+
+    std::vector<std::string> outputPrefix = { "MVSO", "LiDAR" };
+
+    // Read the hole boundary projection/polygon JSON file.
+    std::shared_ptr<JSON> pJson = read_json( args.inHoleProj );
+
+    auto pHBP = std::make_shared<pcu::HoleBoundaryPoints<float>>( );
+
+    if ( args.holeID >= 0 ) {
+        // The output directory with the hole ID.
+        std::stringstream ssOutDir;
+        ssOutDir << args.outDir << "/" << args.holeID;
+        std::string outDir = ssOutDir.str();
+
+        // Test the output directory.
+        test_directory(outDir);
+
+        // Find and create a HoleBoundaryPoints object according to the specified ID.
+        try {
+            pHBP = find_boundary_polygon<float>( *pJson, args.holeID );
+        } catch ( id_not_found &ex ) {
+            std::cout << EXCEPTION_DIAG_INFO(ex) << std::endl;
+            std::cout << "ID " << args.holeID << " not found. Abort! " << std::endl;
+            return 1;
+        } catch ( ... ) {
+            std::cout << "Unknown error! " << std::endl;
+            return 1;
+        }
+
+//        // Test use.
+//        std::cout << "pHBP: " << std::endl;
+//        std::cout << *pHBP << std::endl;
+
+        // Load point clouds.
+        pcl::PointCloud<pcl::PointXYZ>::Ptr pMVSO =
+                pcu::read_point_cloud<pcl::PointXYZ>( args.inMVSOriginal );
+
+        pcl::PointCloud<pcl::PointXYZ>::Ptr pLiDAR =
+                pcu::read_point_cloud<pcl::PointXYZ>( args.inLiDAR );
+
+        pcl::PointCloud<pcl::PointXYZ>::Ptr pMVSB =
+                pcu::read_point_cloud<pcl::PointXYZ>( args.inMVSBoundary );
+
+        // Extract the boundary points.
+        pcl::PointCloud<pcl::PointXYZ>::Ptr pBoundary =
+                pcu::extract_points<pcl::PointXYZ, int>( pMVSB, pHBP->polygonIndices );
+
+        // Save the boundary points for future process.
+        std::string boundaryPointsFn = outDir + "/BoundaryPoints.ply";
+        pcu::write_point_cloud<pcl::PointXYZ>( boundaryPointsFn, pBoundary );
+
+        if ( nullptr != pHBP->pCamProj.get() ) {
+            generate_data_with_camera<pcl::PointXYZ, float>(args, outDir, pBoundary,
+                    pMVSO, pLiDAR, outputPrefix, pHBP);
+        } else {
+            generate_data_without_camera<pcl::PointXYZ, float>(args, outDir, pBoundary,
+                    pMVSO, pLiDAR, outputPrefix, pHBP);
+        }
+    } else {
+        std::cout << "Process all holes. " << std::endl;
+
+        // Load point clouds.
+        pcl::PointCloud<pcl::PointXYZ>::Ptr pMVSO =
+                pcu::read_point_cloud<pcl::PointXYZ>( args.inMVSOriginal );
+
+        pcl::PointCloud<pcl::PointXYZ>::Ptr pLiDAR =
+                pcu::read_point_cloud<pcl::PointXYZ>( args.inLiDAR );
+
+        pcl::PointCloud<pcl::PointXYZ>::Ptr pMVSB =
+                pcu::read_point_cloud<pcl::PointXYZ>( args.inMVSBoundary );
+
+        const auto& hpp = (*pJson)["hpp"];
+        const int N = hpp.size();
+
+        for ( int i = 0; i < N; ++i ) {
+            int id = hpp[i]["id"];
+            std::cout << std::endl
+                << "========== Hole " << i << " =========="
+                << std::endl << std::endl;
+
+            // The output directory with the hole ID.
+            std::stringstream ssOutDir;
+            ssOutDir << args.outDir << "/" << id;
+            std::string outDir = ssOutDir.str();
+
+            // Test the output directory.
+            test_directory(outDir);
+
+            pHBP = retrieve_hbp<float>(*pJson, i);
+
+//            // Test use.
+//            std::cout << "pHBP: " << std::endl;
+//            std::cout << *pHBP << std::endl;
+
+            // Extract the boundary points.
+            pcl::PointCloud<pcl::PointXYZ>::Ptr pBoundary =
+                    pcu::extract_points<pcl::PointXYZ, int>( pMVSB, pHBP->polygonIndices );
+
+            // Save the boundary points for future process.
+            std::string boundaryPointsFn = outDir + "/BoundaryPoints.ply";
+            pcu::write_point_cloud<pcl::PointXYZ>( boundaryPointsFn, pBoundary );
+
+            if ( nullptr != pHBP->pCamProj.get() ) {
+                generate_data_with_camera<pcl::PointXYZ, float>(args, outDir, pBoundary,
+                        pMVSO, pLiDAR, outputPrefix, pHBP);
+            } else {
+                generate_data_without_camera<pcl::PointXYZ, float>(args, outDir, pBoundary,
+                        pMVSO, pLiDAR, outputPrefix, pHBP);
+            }
+        }
+    }
 
     return 0;
 }

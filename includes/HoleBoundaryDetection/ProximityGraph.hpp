@@ -150,8 +150,8 @@ void KRProximityGraph<pcT>::process(int showDetailBase) {
     tree->setInputCloud(this->ppc);
 
     // Loop over all the points of the input point cloud.
-    std::vector<int> indexKNN(k);
-    std::vector<float> squaredDistance(k);
+    std::vector<int> indexKNN;
+    std::vector<float> squaredDistance;
     std::vector<int> indexR;
     std::vector<float> squaredDistanceR;
 

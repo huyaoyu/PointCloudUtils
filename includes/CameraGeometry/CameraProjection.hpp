@@ -100,6 +100,7 @@ public:
 
     bool is_camera_point_in_image( const Eigen::Vector3<rT>& cp ) const;
     bool is_world_point_in_image( const Eigen::Vector3<rT>& wp ) const;
+    bool are_world_points_in_image( const Eigen::MatrixX<rT> &wp ) const;
 
     rT angle_cosine_between_camera_normal( const Eigen::Vector3<rT> &wn ) const;
     rT pixel_distance_from_principal_point( rT x, rT y ) const ;
@@ -309,6 +310,28 @@ bool CameraProjection<rT>::is_world_point_in_image(const Eigen::Vector3<rT> &wp)
     world_2_camera(wp, cp);
 
     return is_camera_point_in_image(cp);
+}
+
+template < typename rT >
+bool CameraProjection<rT>::are_world_points_in_image( const Eigen::MatrixX<rT> &wps ) const {
+    assert( 3 == wps.rows() );
+
+    Eigen::Vector3<rT> wp;
+    Eigen::Vector3<rT> cp;
+
+    bool flag = true;
+
+    for ( int i = 0; i < wps.cols(); ++i ) {
+        wp << wps(0, i), wps(1, i), wps(2, i);
+        world_2_camera(wp, cp);
+
+        if ( !is_camera_point_in_image(cp) ) {
+            flag = false;
+            break;
+        }
+    }
+
+    return flag;
 }
 
 template < typename rT >

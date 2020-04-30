@@ -21,9 +21,11 @@
 #include <pcl/ModelCoefficients.h>
 #include <pcl/surface/convex_hull.h>
 
+#include "PCCommon/common.hpp"
 #include "PCCommon/extraction.hpp"
 #include "PCCommon/Projection.hpp"
 #include "CameraGeometry/CameraProjection.hpp"
+#include "Geometry/SimpleIntersection.hpp"
 #include "Profiling/SimpleTime.hpp"
 
 namespace pcu
@@ -32,12 +34,14 @@ namespace pcu
 template < typename rT >
 class HoleBoundaryPoints {
 public:
-    HoleBoundaryPoints() = default;
-    HoleBoundaryPoints( const HoleBoundaryPoints<rT> &other ) {
+    HoleBoundaryPoints() : pCamProj(nullptr) {}
+    HoleBoundaryPoints( const HoleBoundaryPoints<rT> &other ) : pCamProj(nullptr) {
         this->id               = other.id;
         this->polygonIndices   = other.polygonIndices;
         this->equivalentNormal = other.equivalentNormal;
-        this->camProj          = other.camProj;
+        if ( nullptr != other.pCamProj.get() ) {
+            this->pCamProj     = std::make_shared<CameraProjection<rT>>(*(other.pCamProj));
+        }
     }
 
     ~HoleBoundaryPoints() = default;
@@ -50,7 +54,11 @@ public:
         this->id               = other.id;
         this->polygonIndices   = other.polygonIndices;
         this->equivalentNormal = other.equivalentNormal;
-        this->camProj          = other.camProj;
+        if ( nullptr != other.pCamProj.get() ) {
+            this->pCamProj     = std::make_shared<CameraProjection<rT>>(*(other.pCamProj));
+        } else {
+            this->pCamProj.reset();
+        }
 
         return *this;
     }
@@ -87,9 +95,11 @@ public:
             }
         }
 
-        out << "\"camProj\": ";
+        if ( nullptr != hbp.pCamProj.get() ) {
+            out << "\"camProj\": ";
 
-        out << hbp.camProj << std::endl;
+            out << *(hbp.pCamProj) << std::endl;
+        }
 
         out << std::endl << "}";
     }
@@ -98,7 +108,7 @@ public:
     int id;
     std::vector<int> polygonIndices;
     pcl::PointNormal equivalentNormal;
-    CameraProjection<rT> camProj;
+    std::shared_ptr< CameraProjection<rT> > pCamProj;
 };
 
 template < typename rT >
@@ -139,9 +149,13 @@ void HoleBoundaryPoints<rT>::write_json_content( std::ofstream &ofs,
         }
     }
 
-    ofs << baseIndentPlus << "\"camProj\": ";
-
-    camProj.write_json_content(ofs, indent, baseIndentNum+1);
+    if ( nullptr != pCamProj.get() ) {
+        ofs << baseIndentPlus << "\"haveCamProj\": true," << std::endl;
+        ofs << baseIndentPlus << "\"camProj\": ";
+        pCamProj->write_json_content(ofs, indent, baseIndentNum+1);
+    } else {
+        ofs << baseIndentPlus << "\"haveCamProj\": false";
+    }
 
     ofs << std::endl << baseIndent << "}";
 }
@@ -155,8 +169,11 @@ public:
 //    typedef std::shared_ptr<DS_t> DSPtr;
 
 public:
-    HoleBoundaryProjector() = default;
+    HoleBoundaryProjector() : projectionNumberLimit(3) {}
     ~HoleBoundaryProjector() = default;
+
+    void set_projection_number_limit(int v);
+    void set_projection_curvature_limit(rT v);
 
     void process( const typename PC_t::Ptr pInCloud,
             const DS_t& DS,
@@ -166,19 +183,56 @@ public:
 
 protected:
     int find_best_camera( const pcl::PointNormal& en,
-            const std::vector< CameraProjection<rT> >& cameraProjections );
+            const std::vector< CameraProjection<rT> >& cameraProjections,
+            bool flagDebug = false);
+
+    bool are_points_visible_2_camera(
+            const typename pcl::PointCloud<pT>::Ptr pInput,
+            const CameraProjection<rT> &camProj );
 
     void plane_projection_and_convex_hull(
             const typename PC_t::Ptr pInput,
             const pcl::PointIndices::Ptr pIndices,
             const pcl::PointNormal &pn,
             std::vector<int> &polygonIndices );
+
+    void find_and_add_polygon( const typename pcl::PointCloud<pT>::Ptr pSubSet,
+                               const pcl::PointIndices::Ptr pOriginalIndices,
+                               const pcl::PointNormal &planePointNormal,
+                               int id,
+                               const pcl::PointNormal &equivalentNormal,
+                               const CameraProjection<rT> &cProj,
+                               std::vector<HoleBoundaryPoints<rT>> &hbp );
+
+    void find_and_add_polygon( const typename pcl::PointCloud<pT>::Ptr pSubSet,
+                               const pcl::PointIndices::Ptr pOriginalIndices,
+                               const pcl::PointNormal &planePointNormal,
+                               int id,
+                               const pcl::PointNormal &equivalentNormal,
+                               std::vector<HoleBoundaryPoints<rT>> &hbp );
+
+private:
+    int projectionNumberLimit;
+    rT projectionCurvatureLimit;
 };
+
+template < typename pT, typename rT >
+void HoleBoundaryProjector<pT, rT>::set_projection_number_limit(int v) {
+    assert( v >= 3 );
+    projectionNumberLimit = v;
+}
+
+template < typename pT, typename rT >
+void HoleBoundaryProjector<pT, rT>::set_projection_curvature_limit(rT v) {
+    assert( v > 0 );
+    projectionCurvatureLimit = v;
+}
 
 template < typename pT, typename rT >
 int HoleBoundaryProjector<pT, rT>::find_best_camera(
         const pcl::PointNormal& en,
-        const std::vector< CameraProjection<rT> >& cameraProjections ) {
+        const std::vector< CameraProjection<rT> >& cameraProjections,
+        bool flagDebug ) {
 
     const int nCams = cameraProjections.size();
 
@@ -188,61 +242,96 @@ int HoleBoundaryProjector<pT, rT>::find_best_camera(
     Eigen::Vector3<rT> normal;
     normal << en.normal_x, en.normal_y, en.normal_z;
 
-    Eigen::Vector3<rT> pixel;
+    Eigen::Vector3<rT> imgPlanePoint;
     rT angleCosine;
-    rT pixelDistance;
+    rT imgPlaneDistance;
 
     rT bestDistance = 0.0f;
     int bestCamIdx = -1;
+
+    const int debugIdx0 = 1449;
+    const int debugIdx1 = 1450;
 
     // Loop over all cameras.
     for ( int i = 0; i< nCams; ++i ) {
         // Get the camera projection object.
         const CameraProjection<rT>& cProj = cameraProjections[i];
 
-//        if ( 330 == cProj.id ) {
-//            std::cout << "Debug id = " << 330 << std::endl;
-//            std::cout << "centroid: " << std::endl << centroid << std::endl;
-//            std::cout << "normal: " << std::endl << normal << std::endl;
-//
-//            std::cout << "cProj.R: " << std::endl << cProj.R << std::endl;
-//        }
+        if ( flagDebug && ( debugIdx0 == cProj.id || debugIdx1 == cProj.id ) ) {
+            std::cout << "Debug id = " << cProj.id << std::endl;
+            std::cout << "centroid: " << std::endl << centroid << std::endl;
+            std::cout << "normal: " << std::endl << normal << std::endl;
+
+            std::cout << "cProj: " << std::endl << cProj << std::endl;
+        }
 
         // Check if the equivalent normal's centroid point
         // could be projected to the cameras image region.
         if ( !cProj.is_world_point_in_image(centroid) ) {
+            if ( flagDebug && ( debugIdx0 == cProj.id || debugIdx1 == cProj.id ) ) {
+                std::cout << "Equivalent centroid is not in the FOV of the camera. " << std::endl;
+            }
             // Not observable by this camera.
             continue;
         }
 
         // Get the cosine of the 3D angle between the equivalent normal
-        // and the camera normal.
-        angleCosine = cProj.angle_cosine_between_camera_normal(normal);
+        // and the vector from camera centroid to the equivalent normal centroid.
+//        angleCosine = cProj.angle_cosine_between_camera_normal(normal);
+        angleCosine = normal.dot( centroid - cProj.T );
 
-        if ( angleCosine >= -0.707 ) {
-            // Filter out normal directions that a smaller than 135 degrees.
+        if ( angleCosine >= -0.5 ) {
+            if ( flagDebug && ( debugIdx0 == cProj.id || debugIdx1 == cProj.id ) ) {
+                std::cout << "Equivalent normal has angleCoseine = " << angleCosine << ". " << std::endl;
+            }
+            // Filter out normal directions that a smaller than 120 degrees.
             continue;
         }
 
-        // Get the camera projection pixel coordinate and the distance from the pincipal point.
-        cProj.world_2_pixel(centroid, pixel);
-        pixelDistance = cProj.pixel_distance_from_principal_point(pixel);
+        // Get the intersection of the equivalent normal and the camera sensor plane.
+        auto camNormal = cProj.get_z_axis();
 
-        pixelDistance = pixelDistance * std::exp( 1.0f + angleCosine );
+        if (! line_plane_directed_intersection( centroid, normal, cProj.T, camNormal, imgPlanePoint ) ) {
+            if ( flagDebug && ( debugIdx0 == cProj.id || debugIdx1 == cProj.id ) ) {
+                std::cout << "Equivalent normal has no positive intersection. " << std::endl;
+            }
+            // No positive intersection.
+            continue;
+        }
+
+        imgPlaneDistance = ( imgPlanePoint - cProj.T ).norm();
+
+        if ( flagDebug && ( debugIdx0 == cProj.id || debugIdx1 == cProj.id ) ) {
+            std::cout << "camNormal: " << std::endl << camNormal << std::endl;
+            std::cout << "imgPlanePoint: " << std::endl << imgPlanePoint << std::endl;
+            std::cout << "imgPlaneDistance: " << std::endl << imgPlaneDistance << std::endl;
+        }
 
         if ( -1 == bestCamIdx ) {
-            bestDistance = pixelDistance;
+            bestDistance = imgPlaneDistance;
             bestCamIdx = i;
             continue;
         }
 
-        if ( pixelDistance < bestDistance ) {
-            bestDistance = pixelDistance;
+        if (imgPlaneDistance < bestDistance ) {
+            bestDistance = imgPlaneDistance;
             bestCamIdx = i;
         }
     }
 
     return bestCamIdx;
+}
+
+template < typename pT, typename rT >
+bool HoleBoundaryProjector<pT, rT>::are_points_visible_2_camera(
+        const typename pcl::PointCloud<pT>::Ptr pInput,
+        const CameraProjection<rT> &camProj ) {
+    // Convert PCL point cloud to Eigen matrix.
+    Eigen::MatrixX<rT> wp;
+    convert_pcl_2_eigen_matrix<pT, rT>( pInput, wp );
+
+    // Check visibility.
+    return camProj.are_world_points_in_image( wp );
 }
 
 template < typename pT, typename rT >
@@ -254,7 +343,8 @@ void HoleBoundaryProjector<pT, rT>::plane_projection_and_convex_hull(
 
     // Extract the points.
     typename PC_t::Ptr pPoints ( new PC_t );
-    extract_points<pT>( pInput, pPoints, pIndices );
+//    extract_points<pT>( pInput, pPoints, pIndices );
+    pPoints = pInput; // pInput is the extracted points already.
 
     // Projection.
     typename PC_t::Ptr pProjected = project_2_plane<pT>(pPoints, pn);
@@ -278,6 +368,38 @@ void HoleBoundaryProjector<pT, rT>::plane_projection_and_convex_hull(
 }
 
 template < typename pT, typename rT >
+void HoleBoundaryProjector<pT, rT>::find_and_add_polygon( const typename pcl::PointCloud<pT>::Ptr pSubSet,
+                           const pcl::PointIndices::Ptr pOriginalIndices,
+                           const pcl::PointNormal &planePointNormal,
+                           int id,
+                           const pcl::PointNormal &equivalentNormal,
+                           std::vector<HoleBoundaryPoints<rT>> &hbp ) {
+    // The HoleBoundaryPoints object.
+    HoleBoundaryPoints<rT> newHBP;
+
+    // Convex hull.
+    plane_projection_and_convex_hull( pSubSet, pOriginalIndices, planePointNormal, newHBP.polygonIndices );
+
+    // Copy values.
+    newHBP.id = id;
+    newHBP.equivalentNormal = equivalentNormal;
+
+    hbp.push_back( newHBP );
+}
+
+template < typename pT, typename rT >
+void HoleBoundaryProjector<pT, rT>::find_and_add_polygon( const typename pcl::PointCloud<pT>::Ptr pSubSet,
+                                                          const pcl::PointIndices::Ptr pOriginalIndices,
+                                                          const pcl::PointNormal &planePointNormal,
+                                                          int id,
+                                                          const pcl::PointNormal &equivalentNormal,
+                                                          const CameraProjection<rT> &cProj,
+                                                          std::vector<HoleBoundaryPoints<rT>> &hbp ) {
+    find_and_add_polygon( pSubSet, pOriginalIndices, planePointNormal, id, equivalentNormal, hbp );
+    hbp[ hbp.size() - 1 ].pCamProj = std::make_shared<CameraProjection<rT>>( cProj );
+}
+
+template < typename pT, typename rT >
 void HoleBoundaryProjector<pT, rT>::process(const typename PC_t::Ptr pInCloud,
         const DS_t& DS,
         const PN_t::Ptr pEquivalentNormals,
@@ -289,52 +411,72 @@ void HoleBoundaryProjector<pT, rT>::process(const typename PC_t::Ptr pInCloud,
     const int nEN = pEquivalentNormals->size();
 
     // Loop over all the equivalent normals.
+    bool flagDebug = false;
     for ( int i = 0; i < nEN; ++i ) {
-        // ========== Find the best camera that observe this equivalent normal.
-        // Get the equivalent normal.
-        pcl::PointNormal &en = pEquivalentNormals->at(i);
-        int bestCamIdx = find_best_camera(en, cameraProjections);
-
-        if ( -1 == bestCamIdx ) {
+        // Check if we have enough points to perform a projection.
+        if (DS[i].size() < projectionNumberLimit ) {
             std::cout << i << ": "
-                      << "Equivalent normal " << en
-                      << " has no valid camera pose. " << std::endl;
+                      << "Set contains " << DS[i].size()
+                      << " points which is less than the limit ("
+                      << projectionNumberLimit << "). " << std::endl;
             continue;
         }
 
-        // Test use.
-        {
+        // Get the points.
+        pcl::PointIndices::Ptr pIndicesOnInput = convert_vector_2_pcl_indices( DS[i] );
+        typename pcl::PointCloud<pT>::Ptr pPointSubSet =
+                extract_points<pT>( pInCloud, pIndicesOnInput );
+
+        // Get the equivalent normal.
+        pcl::PointNormal &en = pEquivalentNormals->at(i);
+
+        // ========== Find the best camera that observe this equivalent normal.
+//        flagDebug = ( 15 == i ) ? true : false;
+        int bestCamIdx = find_best_camera(en, cameraProjections, flagDebug);
+
+        if ( -1 != bestCamIdx ) {
             std::cout << i << ": "
                       << "Best camera id for equivalent normal " << en
                       << " is " << cameraProjections[bestCamIdx].id << std::endl;
+
+            // Get the best camera projection object.
+            const CameraProjection<rT> &cProj = cameraProjections[bestCamIdx];
+
+            // Check visibility.
+            if ( !are_points_visible_2_camera( pPointSubSet, cProj ) ) {
+                std::cout << i << ": "
+                          << "Set contains points out of the FOV of the camera. " << std::endl;
+            } else {
+                // Project the points to the camera plane and
+                // find the 2D polygon of the projected boundary points.
+                pcl::PointNormal cameraPlaneNormal;
+                cameraPlaneNormal.curvature = 0.0f;
+                cProj.get_center( cameraPlaneNormal.x,
+                                  cameraPlaneNormal.y, cameraPlaneNormal.z );
+                cProj.get_z_axis( cameraPlaneNormal.normal_x,
+                                  cameraPlaneNormal.normal_y, cameraPlaneNormal.normal_z );
+
+                find_and_add_polygon( pPointSubSet, pIndicesOnInput, cameraPlaneNormal, i, en, cProj, hbp );
+
+                continue;
+            }
+        } else {
+            std::cout << i << ": "
+                      << "Equivalent normal " << en
+                      << " has no valid camera pose. " << std::endl;
         }
 
-        // Get the best camera projectiong object.
-        const CameraProjection<rT> &cProj = cameraProjections[bestCamIdx];
-
-        // Project the points to the camera plane and
-        // find the 2D polygon of the projected boundary points.
-        pcl::PointNormal cameraPlaneNormal; cameraPlaneNormal.curvature = 0.0f;
-        cProj.get_center( cameraPlaneNormal.x,
-                cameraPlaneNormal.y, cameraPlaneNormal.z );
-        cProj.get_z_axis( cameraPlaneNormal.normal_x,
-                cameraPlaneNormal.normal_y, cameraPlaneNormal.normal_z );
-
-        // The HoleBoundaryPoints object.
-        HoleBoundaryPoints<rT> newHBP;
-
-        pcl::PointIndices::Ptr pIndicesOnInput = convert_vector_2_pcl_indices( DS[i] );
-        plane_projection_and_convex_hull( pInCloud, pIndicesOnInput, cameraPlaneNormal, newHBP.polygonIndices );
-
-        // Copy values.
-        newHBP.id = i;
-        newHBP.equivalentNormal = en;
-        newHBP.camProj = cProj;
-
-        hbp.push_back( newHBP );
+        if ( en.curvature <= projectionCurvatureLimit ) {
+            std::cout << i << ": Equivalent normal has a curvature lower than the limit. " << std::endl;
+            find_and_add_polygon( pPointSubSet, pIndicesOnInput, en, i, en, hbp );
+            continue;
+        } else {
+            std::cout << i << ": Equivalent normal has a curvature (" << en.curvature << ") higher than the limit ("
+                      << projectionCurvatureLimit << "). " << std::endl;
+        }
     }
 }
 
-}
+} // Namespace pcu.
 
 #endif //POINTCLOUDUTILS_INCLUDES_HOLEBOUNDARYDETECTION_HOLEBOUNDARYPROJECTION_HPP

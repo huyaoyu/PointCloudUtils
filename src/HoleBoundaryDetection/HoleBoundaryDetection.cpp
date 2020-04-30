@@ -21,6 +21,7 @@
 #include "PCCommon/IO.hpp"
 #include "Filesystem/Filesystem.hpp"
 #include "Profiling/SimpleTime.hpp"
+#include "Visualization/Print.hpp"
 
 #include "HoleBoundaryDetection/HoleBoundaryDetector.hpp"
 
@@ -159,11 +160,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Hello, HoleBoundaryDetection!" << std::endl;
 
     // Handle the command line.
-    Args args;
-    parse_args(argc, argv, args);
-
-    std::cout << "args: " << std::endl;
-    std::cout << args << std::endl;
+    MAIN_COMMON_LINES(argc, argv, args)
 
     // Define the point cloud object.
     typedef pcl::PointNormal P_t;
@@ -171,9 +168,11 @@ int main(int argc, char* argv[]) {
     PC_t::Ptr pInput(new PC_t);
 
     // Read the point cloud.
+    print_bar("Load the point cloud.");
     pcu::read_point_cloud<P_t>(args.inFile, pInput);
 
     // The hole boundary detector.
+    print_bar("Boundary detection.");
     auto hbd = pcu::HBDetector();
 
     hbd.set_point_cloud(pInput);
@@ -188,6 +187,7 @@ int main(int argc, char* argv[]) {
 //    test_show_proximity_graph_vertex_neighbors<P_t>(pInput, hbd, index);
 
     // Test the output directory.
+    print_bar("Write results.");
     test_directory(args.outDir);
 
     {

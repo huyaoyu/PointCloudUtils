@@ -25,6 +25,38 @@
 namespace pcu
 {
 
+class IndexSet {
+public:
+    typedef enum {
+        UNDEFINED = 0,
+        CIRCLE,
+        OPEN
+    }BIType_t;
+
+public:
+    IndexSet() : type(UNDEFINED) {}
+    ~IndexSet() = default;
+
+    void clear() {
+        indices.clear();
+        type = UNDEFINED;
+    }
+
+    void copy_indices( const std::vector<int> &extIndices ) {
+        assert( extIndices.size() > 0 );
+
+        // Resize.
+        indices.resize( extIndices.size() );
+
+        // Copy.
+        std::copy( extIndices.begin(), extIndices.end(), indices.begin() );
+    }
+
+public:
+    BIType_t type;
+    std::vector<int> indices;
+};
+
 class HBDetector {
 public:
     typedef pcl::PointNormal P_t;
@@ -58,6 +90,7 @@ protected:
     void coherence_filter( std::vector<bool>& vbFlag, std::vector<int>& candidates );
     void coherence_filter();
     void make_disjoint_boundary_candidates();
+    void find_circles();
     void compute_centroid_and_equivalent_normal();
 
     template <typename T>
@@ -96,7 +129,8 @@ protected:
     float criterionThreshold;
 
     std::vector<int> boundaryCandidates;
-    std::vector< std::vector<int> > disjointBoundaryCandidates;
+    std::vector< std::vector<int> > disjointPointSets;
+    std::vector< IndexSet > disjointBoundaryCandidates;
 
     int equivalentNormalAveragingLimit;
     EIGEN_ALIGN16 Eigen::Vector4f normalViewPoint;
