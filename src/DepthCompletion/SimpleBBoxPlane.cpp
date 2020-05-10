@@ -684,7 +684,7 @@ int main( int argc, char** argv ) {
     // Compute the oriented bounding box.
     P_t bbMinPoint, bbMaxPoint, bbPosition;
     Eigen::Matrix3f bbRotMat;
-    pcu::get_obb<P_t>( pMVS, bbMinPoint, bbMaxPoint, bbPosition, bbRotMat );
+    pcu::get_obb<P_t, float>( pMVS, bbMinPoint, bbMaxPoint, bbPosition, bbRotMat );
 
     // Test use.
     std::cout << "bbMinPoint = " << bbMinPoint << std::endl;

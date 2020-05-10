@@ -35,7 +35,8 @@ public:
     Args()
     : pgK(AI_PROXIMITY_GRAPH_K), pgR(AI_PROXIMITY_GRAPH_R), pgSDB(AI_PROXIMITY_GRAPH_SDB),
       cStartIdx(AI_C_START_IDX),
-      enLimit(AI_EN_LIMIT)
+      enLimit(AI_EN_LIMIT),
+      flagSectionBorder(false), sectionBorderLimit(AI_SEC_BORDER_LIMIT)
     {}
 
     ~Args() = default;
@@ -53,6 +54,11 @@ public:
             std::cout << "Wrong " << AS_EN_LIMIT << " value " << enLimit << ". Must be non-negative. " << std::endl;
         }
 
+        if ( flagSectionBorder && sectionBorderLimit <= 0 ) {
+            flag = false;
+            std::cout << "wrong " << AS_SEC_BORDER_LIMIT << " value " << sectionBorderLimit << ". Must be positive. " << std::endl;
+        }
+
         return flag;
     }
 
@@ -64,6 +70,13 @@ public:
         out << Args::AS_PROXIMITY_GRAPH_SDB << ": " << args.pgSDB << std::endl;
         out << Args::AS_C_START_IDX << ": " << args.cStartIdx << std::endl;
         out << Args::AS_EN_LIMIT << ": " << args.enLimit << std::endl;
+        out << Args::AS_FLAG_SEC_BORDER << ": " << args.flagSectionBorder << std::endl;
+        if ( args.flagSectionBorder ) {
+            out << Args::AS_SEC_BORDER_LIMIT << ": " << args.sectionBorderLimit << std::endl;
+            out << Args::AS_SEC_BORDER_CORNERS << ": " << std::endl;
+            show_numeric_vector(args.sectionBorderCorners);
+            out << std::endl;
+        }
 
         return out;
     }
@@ -76,12 +89,16 @@ public:
     static const std::string AS_PROXIMITY_GRAPH_SDB;
     static const std::string AS_C_START_IDX;
     static const std::string AS_EN_LIMIT;
+    static const std::string AS_FLAG_SEC_BORDER;
+    static const std::string AS_SEC_BORDER_CORNERS;
+    static const std::string AS_SEC_BORDER_LIMIT;
 
     static const int AI_PROXIMITY_GRAPH_K; // AI stands for argument initial value.
     static const double AI_PROXIMITY_GRAPH_R;
     static const int AI_PROXIMITY_GRAPH_SDB;
     static const int AI_C_START_IDX;
     static const int AI_EN_LIMIT;
+    static const int AI_SEC_BORDER_LIMIT;
 
 public:
     std::string inFile; // The input point cloud file.
@@ -91,6 +108,9 @@ public:
     int    pgSDB;
     int    cStartIdx; // Criteria computation starting index.
     int    enLimit; // The limit number of points for equivalent normal computation.
+    bool   flagSectionBorder; // True if filter points near section borders.
+    std::vector<float> sectionBorderCorners;
+    float  sectionBorderLimit; // Set this value if flagSectionBorder is set.
 };
 
 const std::string Args::AS_IN_CLOUD = "infile";
@@ -100,14 +120,19 @@ const std::string Args::AS_PROXIMITY_GRAPH_R   = "pg-r";
 const std::string Args::AS_PROXIMITY_GRAPH_SDB = "pg-sdb";
 const std::string Args::AS_C_START_IDX = "c-start-index";
 const std::string Args::AS_EN_LIMIT = "en-limit";
+const std::string Args::AS_FLAG_SEC_BORDER = "sec-border";
+const std::string Args::AS_SEC_BORDER_CORNERS = "sec-border-corners";
+const std::string Args::AS_SEC_BORDER_LIMIT = "sec-border-limit";
 
 const int    Args::AI_PROXIMITY_GRAPH_K   = 10;
 const double Args::AI_PROXIMITY_GRAPH_R   = 0.02;
 const int    Args::AI_PROXIMITY_GRAPH_SDB = 100000;
 const int    Args::AI_C_START_IDX         = 0;
 const int    Args::AI_EN_LIMIT            = 50;
+const int    Args::AI_SEC_BORDER_LIMIT    = 0.05;
 
 static void parse_args(int argc, char* argv[], Args& args) {
+    std::string secBorderCornersString;
 
     try
     {
@@ -121,7 +146,10 @@ static void parse_args(int argc, char* argv[], Args& args) {
                 (Args::AS_PROXIMITY_GRAPH_R.c_str(), bpo::value< double >(&args.pgR)->default_value(Args::AI_PROXIMITY_GRAPH_R), "The radius for the proximity graph.")
                 (Args::AS_PROXIMITY_GRAPH_SDB.c_str(), bpo::value< int >(&args.pgSDB)->default_value(Args::AI_PROXIMITY_GRAPH_SDB), "The show-detail base for the proximity graph.")
                 (Args::AS_C_START_IDX.c_str(), bpo::value< int >(&args.cStartIdx)->default_value(Args::AI_C_START_IDX), "The starting index of the computation of the boundary criteria.")
-                (Args::AS_EN_LIMIT.c_str(), bpo::value< int >(&args.enLimit)->default_value(Args::AI_EN_LIMIT), "The limit number of points for normal averaging.");
+                (Args::AS_EN_LIMIT.c_str(), bpo::value< int >(&args.enLimit)->default_value(Args::AI_EN_LIMIT), "The limit number of points for normal averaging.")
+                (Args::AS_FLAG_SEC_BORDER.c_str(), bpo::value< bool >( &args.flagSectionBorder )->implicit_value(true), "Set this to enable section border filter. Must set --sec-border-limit.")
+                (Args::AS_SEC_BORDER_LIMIT.c_str(), bpo::value< float >( &args.sectionBorderLimit )->default_value(Args::AI_SEC_BORDER_LIMIT), "The limit distance to classify a point to be near the border of the point cloud section. ")
+                (Args::AS_SEC_BORDER_CORNERS.c_str(), bpo::value< std::string >( &secBorderCornersString ), "The section border corner points, x0, y0, z0, x1, y1, z1.");
 
         bpo::positional_options_description posOptDesc;
         posOptDesc.add(Args::AS_IN_CLOUD.c_str(), 1).add(Args::AS_OUT_DIR.c_str(), 1);
@@ -130,11 +158,22 @@ static void parse_args(int argc, char* argv[], Args& args) {
         bpo::store(bpo::command_line_parser(argc, argv).
                 options(optDesc).positional(posOptDesc).run(), optVM);
         bpo::notify(optVM);
+
+        if ( optVM.count(Args::AS_FLAG_SEC_BORDER.c_str()) ) {
+            args.flagSectionBorder = true;
+        }
+
+        args.sectionBorderCorners = extract_number_from_string<float>(
+                        secBorderCornersString, 6, "," );
     }
     catch(std::exception& e)
     {
         std::cout << e.what() << std::endl;
         throw(e);
+    }
+
+    if ( !args.validate() ) {
+        EXCEPTION_INVALID_ARGUMENTS(args)
     }
 }
 
@@ -162,6 +201,8 @@ int main(int argc, char* argv[]) {
     // Handle the command line.
     MAIN_COMMON_LINES(argc, argv, args)
 
+    QUICK_TIME_START(teMain)
+
     // Define the point cloud object.
     typedef pcl::PointNormal P_t;
     typedef pcl::PointCloud<P_t> PC_t;
@@ -179,6 +220,11 @@ int main(int argc, char* argv[]) {
     hbd.set_proximity_graph_params(args.pgK, args.pgR, args.pgSDB);
     hbd.set_criterion_computation_start_index(args.cStartIdx);
     hbd.set_equivalent_normal_averaging_limit(args.enLimit);
+
+    if ( args.flagSectionBorder ) {
+        hbd.set_section_border_corners(args.sectionBorderCorners);
+        hbd.set_section_border_threshold(args.sectionBorderLimit);
+    }
 
     hbd.process();
 
@@ -249,6 +295,9 @@ int main(int argc, char* argv[]) {
         std::string outFn = args.outDir + "/DisjointSets.json";
         hbd.write_disjoint_sets_and_normal_as_json(outFn);
     }
+
+    QUICK_TIME_END(teMain)
+    std::cout << "HoleBoundaryDetection in " << teMain << " ms. " << std::endl;
 
     return 0;
 }

@@ -27,6 +27,7 @@ HBDetector::HBDetector()
   criteriaComputationStartIdx(0),
   factorAngleCriterion(0.4), factorHalfDiscCriterion(0.4), factorShapeCriterion(0.2),
   criterionThreshold(0.5),
+  flagSectionBorder(false), sectionBorderThreshold(0.05),
   equivalentNormalAveragingLimit(50),
   pEquivalentNormal(new pcl::PointCloud<pcl::PointNormal>)
 {
@@ -68,6 +69,47 @@ void HBDetector::set_criterion_params(float fA, float fH, float fS, float t) {
     factorHalfDiscCriterion = fH;
     factorShapeCriterion    = fS;
     criterionThreshold      = t;
+}
+
+template < typename rT >
+static void sort_two( const rT &x0, const rT &x1, rT &s0, rT &s1 ) {
+    rT t0, t1; // Handle the situation of s0 and x0 being the same object.
+
+    if ( x0 <= x1 ) {
+        t0 = x0;
+        t1 = x1;
+    } else {
+        t0 = x1;
+        t1 = x0;
+    }
+
+    s0 = t0;
+    s1 = t1;
+}
+
+void HBDetector::set_section_border_corners( const std::vector<float> &corners ) {
+    float c0, c1;
+
+    sectionBorder = Eigen::MatrixXf::Ones(4, 2);
+
+    sort_two( corners[0], corners[3], c0, c1 );
+    sectionBorder(0, 0) = c0;
+    sectionBorder(0, 1) = c1;
+
+    sort_two( corners[1], corners[4], c0, c1 );
+    sectionBorder(1, 0) = c0;
+    sectionBorder(1, 1) = c1;
+
+    sort_two( corners[2], corners[5], c0, c1 );
+    sectionBorder(2, 0) = c0;
+    sectionBorder(2, 1) = c1;
+
+    flagSectionBorder = true;
+}
+
+void HBDetector::set_section_border_threshold( float t ) {
+    assert(t > 0);
+    sectionBorderThreshold = t;
 }
 
 void HBDetector::set_normal_view_point(float x, float y, float z) {
@@ -188,6 +230,59 @@ void HBDetector::coherence_filter() {
     QUICK_TIME_END(te)
 
     std::cout << "Coherence filter in " << te << "ms. " << std::endl;
+}
+
+bool HBDetector::is_near_border(const P_t &point) {
+    if ( point.x - sectionBorder(0,0) <= sectionBorderThreshold ) {
+        return true;
+    }
+
+    if ( sectionBorder(0,1) - point.x <= sectionBorderThreshold ) {
+        return true;
+    }
+
+    if ( point.y - sectionBorder(1,0) <= sectionBorderThreshold ) {
+        return true;
+    }
+
+    if ( sectionBorder(1,1) - point.y <= sectionBorderThreshold ) {
+        return true;
+    }
+
+    if ( point.z - sectionBorder(2,0) <= sectionBorderThreshold ) {
+        return true;
+    }
+
+    if ( sectionBorder(2,1) - point.z <= sectionBorderThreshold ) {
+        return true;
+    }
+
+    return false;
+}
+
+void HBDetector::section_border_filter() {
+    QUICK_TIME_START(te)
+
+    const size_t originalSize = boundaryCandidates.size();
+
+    std::vector<int> nonBorderIndices;
+    for ( const int idx : boundaryCandidates ) {
+        // Get the point from the input point cloud.
+        if ( !( is_near_border( pInput->at(idx) ) ) ) {
+            nonBorderIndices.push_back(idx);
+        }
+    }
+
+    // Overwrite boundaryCandidates member variable.
+    boundaryCandidates = nonBorderIndices;
+
+    std::cout << "Section border filter. Filtered out "
+              << originalSize << " - " << boundaryCandidates.size() << " = "
+              << originalSize - boundaryCandidates.size() << " points. "
+              << std::endl;
+
+    QUICK_TIME_END(te)
+    std::cout << "Section boundary filter in " << te << "ms. " << std::endl;
 }
 
 void HBDetector::map_indices_in_proximity_graph(
@@ -624,6 +719,12 @@ void HBDetector::process(){
     // Coherence filter.
     print_bar("Detector: Coherence filter.", 40);
     coherence_filter();
+
+    // Section border filter.
+    if ( flagSectionBorder ) {
+        print_bar("Detector: Section border filter.", 40);
+        section_border_filter();
+    }
 
     // Make disjoint sets from the boundary candidates.
     print_bar("Detector: Disjoint boundary candidates.", 40);

@@ -16,16 +16,34 @@
 
 namespace pcu
 {
+template < typename pT, typename rT >
+struct OBB {
+    pT minPoint;
+    pT maxPoint;
+    pT position;
+    Eigen::Matrix3<rT> rotMat;
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+};
 
-template < typename pT >
+template < typename pT, typename rT >
 void get_obb( const typename pcl::PointCloud<pT>::Ptr pInput,
-                     pcl::PointXYZ &minPoint, pcl::PointXYZ &maxPoint,
-                     pcl::PointXYZ &position, Eigen::Matrix3f &rotMat ) {
+                     pT &minPoint, pT &maxPoint,
+                     pT &position, Eigen::Matrix3<rT> &rotMat ) {
     pcl::MomentOfInertiaEstimation<pT> extractor;
     extractor.setInputCloud(pInput);
     extractor.compute();
 
-    extractor.getOBB( minPoint, maxPoint, position, rotMat );
+    Eigen::Matrix3f tempRotMat;
+
+    extractor.getOBB( minPoint, maxPoint, position, tempRotMat );
+
+    rotMat = tempRotMat.cast<rT>();
+}
+
+template < typename pT, typename rT >
+void get_obb( const typename pcl::PointCloud<pT>::Ptr pInput,
+        OBB<pT, rT> &obb ) {
+    get_obb<pT, rT>( pInput, obb.minPoint, obb.maxPoint, obb.position, obb.rotMat );
 }
 
 }

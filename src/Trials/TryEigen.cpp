@@ -9,6 +9,8 @@
 
 #include <Eigen/Dense>
 
+#include "CPP/Types.hpp"
+
 #define SHOW_MATRIX(x) \
     { \
         std::cout << #x << " = " << std::endl << x << std::endl; \
@@ -34,6 +36,25 @@ static void test_block_as_argument(
         const Eigen::MatrixBase<Derived> &m ) {
     SHOW_MATRIX(m)
     std::cout << "For derived type, must use typename Derived::Scalar to access the underlying scalar type." << std::endl;
+}
+
+template < typename Derived0, typename Derived1 >
+static float inner_product( const Eigen::MatrixBase<Derived0> &m0,
+        const Eigen::MatrixBase<Derived1> &m1 ) {
+    const auto p = m0.transpose() * m1;
+
+    return static_cast<float>( p(0, 0) );
+}
+
+template < typename rT >
+static void same_objects( const Eigen::VectorX<rT> &v0, Eigen::VectorX<rT> &v1 ) {
+    std::cout << "&v0 = " << &v0 << std::endl;
+    std::cout << "&v1 = " << &v1 << std::endl;
+
+    Eigen::MatrixX<rT> R = Eigen::MatrixX<rT>::Random(v0.rows(), v0.rows());
+    Eigen::VectorX<rT> t = Eigen::VectorX<rT>::Random(v0.rows());
+
+    v1 = R * v0 + t;
 }
 
 int main( int argc, char* argv[] ) {
@@ -160,6 +181,64 @@ int main( int argc, char* argv[] ) {
         A << 0, 1, 2, 3, 4, 5;
 
         test_block_as_argument( A.block(0,0,2,2) );
+    }
+
+    {
+        // Test inner product.
+        std::cout << std::endl << "Test inner product. " << std::endl;
+        Eigen::MatrixXf A = Eigen::MatrixXf::Random(3, 1);
+        Eigen::MatrixXf B(A);
+
+        const auto p = A.transpose() * B;
+        std::cout << "decltype(p) is " << type_name<decltype(p)>() << std::endl;
+        std::cout << "p(0,0) = " << p(0, 0) << std::endl;
+
+        const Eigen::MatrixXf C = A.transpose() * B;
+        std::cout << "decltype(C) is " << type_name<decltype(C)>() << std::endl;
+        std::cout << "C(0,0) = " << C(0, 0) << std::endl;
+
+        Eigen::MatrixX3f D = Eigen::Matrix3f::Random();
+        const Eigen::MatrixXf E = D.col(0).transpose() * D.col(0);
+        std::cout << "E(0, 0) = " << E << std::endl;
+
+        auto F = inner_product( D.col(0), D.col(0) );
+        std::cout << "F = " << F << std::endl;
+        F = inner_product( D.block(0,0,3,1), D.block(0,0,3,1) );
+        std::cout << "F = " << F << std::endl;
+
+        Eigen::Vector3f G = D.block(0,0,3,1);
+        F = inner_product( G, D.block(0,0,3,1) );
+        std::cout << "F = " << F << std::endl;
+
+        // The following block will cause a runtime error.
+        // Mixing double and float for multiplication is not allowed inside inner_product().
+//        Eigen::Vector3d J = D.col(0); // This is not allowed.
+//        std::cout << "J = " << J << std::endl;
+//        F = inner_product(J, D.col(0));
+//        std::cout << "F = " << F << std::endl;
+        // This is also not allowed.
+//        F = G.dot(J);
+
+        Eigen::MatrixXf H = G.transpose() * D.block(0,0,3,1);
+        std::cout << "H(0, 0) = " << H(0, 0) << std::endl;
+
+        H = G.transpose() * D.col(0);
+        std::cout << "H(0, 0) = " << H(0, 0) << std::endl;
+    }
+
+    {
+        // Test aliasing.
+        Eigen::MatrixXf matA(2,2);
+        matA << 2, 0,  0, 2;
+        matA.noalias() = matA * matA;
+        std::cout << matA << std::endl;
+
+        Eigen::VectorXf v0 = Eigen::VectorXf::Random(3);
+        std::cout << "v0 = " << v0 << std::endl;
+
+        same_objects(v0, v0);
+
+        std::cout << "v0 = " << v0 << std::endl;
     }
 
     return 0;

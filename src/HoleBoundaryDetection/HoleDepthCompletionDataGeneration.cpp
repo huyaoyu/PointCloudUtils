@@ -531,9 +531,9 @@ static void generate_data_with_camera(const Args &args,
               << "( " << bx1 << ", " << by1 << " ). " << std::endl;
 
     // Compute the oriented bounding box of the boundary points.
-    pcl::PointXYZ obbMinPoint, obbMaxPoint, obbPosition;
+    pT obbMinPoint, obbMaxPoint, obbPosition;
     Eigen::Matrix3<rT> obbRotMat;
-    pcu::get_obb<pT>(pBoundary, obbMinPoint, obbMaxPoint, obbPosition, obbRotMat);
+    pcu::get_obb<pT, rT>(pBoundary, obbMinPoint, obbMaxPoint, obbPosition, obbRotMat);
 
     // Enlarge the b-box a little bit.
     shift_bbox_borders_metric( obbMinPoint, obbMaxPoint, 0.02 );
@@ -563,9 +563,9 @@ static void generate_data_without_camera(const Args &args,
                       const std::vector<std::string> &outputPrefix,
                       const std::shared_ptr<pcu::HoleBoundaryPoints<rT>> pHBP) {
     // Compute the oriented bounding box of the boundary points.
-    pcl::PointXYZ obbMinPoint, obbMaxPoint, obbPosition;
+    pT obbMinPoint, obbMaxPoint, obbPosition;
     Eigen::Matrix3f obbRotMat;
-    pcu::get_obb<pT>(pBoundary, obbMinPoint, obbMaxPoint, obbPosition, obbRotMat);
+    pcu::get_obb<pT, float>(pBoundary, obbMinPoint, obbMaxPoint, obbPosition, obbRotMat);
 
     // Enlarge the b-box a little bit.
     shift_bbox_borders_metric( obbMinPoint, obbMaxPoint, 0.02 );

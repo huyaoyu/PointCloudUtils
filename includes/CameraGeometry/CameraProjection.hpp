@@ -39,6 +39,10 @@ public:
         this->width  = other.width;
 
         this->id = other.id;
+
+        for ( int i = 0; i < 4; ++i ) {
+            this->frustumNormals[i] = other.frustumNormals[i];
+        }
     }
 
     ~CameraProjection() = default;
@@ -59,9 +63,14 @@ public:
 
         this->id = other.id;
 
+        for ( int i = 0; i < 4; ++i ) {
+            this->frustumNormals[i] = other.frustumNormals[i];
+        }
+
         return *this;
     }
 
+    void update_frustum_normals(void);
     void scale_intrinsics(rT s);
 
     void set_rotation_by_quaternion( const Eigen::Quaternion<rT> &q );
@@ -102,6 +111,9 @@ public:
     bool is_world_point_in_image( const Eigen::Vector3<rT>& wp ) const;
     bool are_world_points_in_image( const Eigen::MatrixX<rT> &wp ) const;
 
+    template < typename Derived >
+    bool are_world_points_outside_frustum( const Eigen::MatrixBase<Derived> &wp ) const;
+
     rT angle_cosine_between_camera_normal( const Eigen::Vector3<rT> &wn ) const;
     rT pixel_distance_from_principal_point( rT x, rT y ) const ;
     rT pixel_distance_from_principal_point( const Eigen::Vector3<rT> &pixel ) const;
@@ -128,7 +140,22 @@ public:
         out << "\"T\": [ "
             << cp.T(0) << ", " << cp.T(1) << ", " << cp.T(2) << " ]," << std::endl;
         out << "\"Q\": [ "
-            << cp.Q.w() << ", " << cp.Q.x() << ", " << cp.Q.y() << ", " << cp.Q.z() << " ]" << std::endl;
+            << cp.Q.w() << ", " << cp.Q.x() << ", " << cp.Q.y() << ", " << cp.Q.z() << " ]," << std::endl;
+
+        out << "\"frustumNormals\": [" << std::endl;
+        for ( int i = 0; i < 3; ++i ) {
+            out << "[ "
+                << cp.frustumNormals[i](0) << ", "
+                << cp.frustumNormals[i](1) << ", "
+                << cp.frustumNormals[i](2) << " ],"
+                << std::endl;
+        }
+        out << "[ "
+            << cp.frustumNormals[3](0) << ", "
+            << cp.frustumNormals[3](1) << ", "
+            << cp.frustumNormals[3](2) << " ] ]"
+            << std::endl;
+
         out << "}";
 
         return out;
@@ -146,9 +173,28 @@ public:
     int width;
 
     int id;
+
+    Eigen::Vector3<rT> frustumNormals[4];
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
+
+template < typename rT >
+void CameraProjection<rT>::update_frustum_normals(void) {
+    // The 4 3D corner points of the pixel-plane in the sensor frame (z-axis forwards).
+    Eigen::Vector3<rT> ic[4];
+    // Small errors using width-1 and height-1.
+    ic[0] <<         0 - K(0, 2),          0 - K(1, 2), K(0,0);
+    ic[1] <<     width - K(0, 2),          0 - K(1, 2), K(0,0);
+    ic[2] <<     width - K(0, 2),     height - K(1, 2), K(0,0);
+    ic[3] <<         0 - K(0, 2),     height - K(1, 2), K(0,0);
+
+    // The normal vectors of the frustum faces.
+    frustumNormals[0] = ic[1].cross( ic[0] ); frustumNormals[0].normalize();
+    frustumNormals[1] = ic[2].cross( ic[1] ); frustumNormals[1].normalize();
+    frustumNormals[2] = ic[3].cross( ic[2] ); frustumNormals[2].normalize();
+    frustumNormals[3] = ic[0].cross( ic[3] ); frustumNormals[3].normalize();
+}
 
 template < typename rT >
 void CameraProjection<rT>::scale_intrinsics(rT s) {
@@ -159,6 +205,8 @@ void CameraProjection<rT>::scale_intrinsics(rT s) {
 
     K *= s;
     K(2,2) = static_cast<rT>(1.0);
+
+    update_frustum_normals();
 }
 
 template < typename rT >
@@ -195,7 +243,7 @@ void CameraProjection<rT>::get_z_axis( rT &nx, rT &ny, rT &nz ) const {
 
 template < typename rT >
 void CameraProjection<rT>::world_2_camera(const Eigen::Vector3<rT> &wp, Eigen::Vector3<rT> &cp) const {
-    cp = R.transpose() * ( wp - T);
+    cp = R.transpose() * ( wp.eval() - T);
 }
 
 template < typename rT >
@@ -214,7 +262,7 @@ void CameraProjection<rT>::sensor_2_pixel( const Eigen::Vector3<rT>& sp,
         throw( std::runtime_error( ss.str() ) );
     }
 
-    pixel = K * sp;
+    pixel = K * sp.eval();
 
     pixel(0) = pixel(0) / pixel(2);
     pixel(1) = pixel(1) / pixel(2);
@@ -253,7 +301,7 @@ void CameraProjection<rT>::pixel_2_camera(const Eigen::Vector3<rT> &pixelWithDep
 
 template < typename rT >
 void CameraProjection<rT>::camera_2_world(const Eigen::Vector3<rT> &cp, Eigen::Vector3<rT> &wp) const {
-    wp = R * cp + T;
+    wp = R * cp.eval() + T;
 }
 
 template < typename rT >
@@ -293,11 +341,12 @@ bool CameraProjection<rT>::is_camera_point_in_image(const Eigen::Vector3<rT> &cp
     Eigen::Vector3<rT> pixel;
     sensor_2_pixel(sensorPoint, pixel);
 
-    if ( pixel(0) < 0 || pixel(0) >= width ) {
+    // Using pixel(0) >= width may introduce small amount of error.
+    if ( pixel(0) < 0 || pixel(0) > width ) {
         return false;
     }
-
-    if ( pixel(1) < 0 || pixel(1) >= height ) {
+    // Using pixel(1) >= height may introduce small amount of error.
+    if ( pixel(1) < 0 || pixel(1) > height ) {
         return false;
     }
 
@@ -332,6 +381,40 @@ bool CameraProjection<rT>::are_world_points_in_image( const Eigen::MatrixX<rT> &
     }
 
     return flag;
+}
+
+template < typename rT >
+template < typename Derived >
+bool CameraProjection<rT>::are_world_points_outside_frustum( const Eigen::MatrixBase<Derived> &wps ) const {
+    // Assuming the columns are the points.
+    const int N = wps.cols();
+    bool res = false; // The return value.
+
+    for ( int f = 0; f < 4; ++f ) {
+        int i = 0;
+
+        for ( ; i < N; ++i ) {
+            Eigen::Vector3<rT> v;
+            v << wps(0,i), wps(1,i), wps(2,i);
+
+            // Transfer the world point to the sensor frame.
+            world_2_camera( v, v );
+            v = RC.transpose() * v.eval();
+
+            const rT p = frustumNormals[f].dot( v ); // The inner-product.
+
+            if ( p <= 0 ) {
+                break;
+            }
+        }
+
+        if ( i == N ) {
+            res = true;
+            break;
+        }
+    }
+
+    return res;
 }
 
 template < typename rT >

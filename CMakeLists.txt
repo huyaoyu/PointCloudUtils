@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.15)
 project(PointCloudUtils)
 
+#if(COMMAND cmake_policy)
+#    cmake_policy(SET CMP0003 NEW)
+#    message(STATUS "CMP0003")
+#endif(COMMAND cmake_policy)
+
 set(CMAKE_CXX_STANDARD 14)
 
 # ========== Libraries and includes. ==========
@@ -39,6 +44,12 @@ message(STATUS "LIB_CNPY=${LIB_CNPY}")
 find_package(Ceres REQUIRED)
 include_directories(${CERES_INCLUDE_DIRS})
 
+# OctoMap.
+find_package(octomap REQUIRED PATHS $ENV{OCTOMAP_ROOT}/share/octomap)
+include_directories(${OCTOMAP_INCLUDE_DIRS})
+message(STATUS "OCTOMAP_INCLUDE_DIRS=${OCTOMAP_INCLUDE_DIRS}")
+message(STATUS "OCTOMAP_LIBRARIES=${OCTOMAP_LIBRARIES}")
+
 # The yaml-cpp package.
 find_package(yaml-cpp REQUIRED)
 message(STATUS "yaml-cpp_FOUND=${yaml-cpp_FOUND}")
@@ -46,6 +57,26 @@ message(STATUS "YAML_CPP_INCLUDE_DIR=${yaml_cpp_INCLUDE_DIR}")
 message(STATUS "YAML_CPP_LIBRARIES=${YAML_CPP_LIBRARIES}")
 
 include_directories(includes)
+
+# ========== Local libraries. ==========
+
+set(LIB_CV_COMMON cv_common)
+add_library(${LIB_CV_COMMON} STATIC
+        includes/CVCommon/IO.hpp src/CVCommon/IO.cpp )
+target_include_directories(${LIB_CV_COMMON} PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(${LIB_CV_COMMON}
+        Eigen3::Eigen
+        ${OpenCV_LIBRARIES})
+
+set(LIB_OCCUPANCY_MAP occupancy_map)
+add_library(${LIB_OCCUPANCY_MAP} SHARED
+        includes/OccupancyMap/OccupancyMap.hpp src/OccupancyMap/OccupancyMap.cpp )
+target_include_directories(${LIB_OCCUPANCY_MAP} PUBLIC ${OCTOMAP_INCLUDE_DIRS})
+target_link_directories(${LIB_OCCUPANCY_MAP} PUBLIC ${OCTOMAP_LIBRARY_DIRS})
+target_link_libraries(${LIB_OCCUPANCY_MAP}
+        Eigen3::Eigen
+        ${OCTOMAP_LIBRARIES}
+        ${PCL_LIBRARIES})
 
 # ========== Tools. ==========
 
@@ -136,15 +167,20 @@ add_executable(${EXE_TRIAL_TRY_SMART_POINTER}
 set(EXE_TRIAL_TRY_CMATH Trail_TryCMath)
 add_executable(${EXE_TRIAL_TRY_CMATH} src/Trials/TryCMath.cpp)
 
-# ========== Local libraries. ==========
+set(EXE_TRIAL_TRY_VECOTR Trail_TryVector)
+add_executable(${EXE_TRIAL_TRY_VECOTR} src/Trials/TryVector.cpp)
 
-set(LIB_CV_COMMON cv_common)
-add_library(${LIB_CV_COMMON} STATIC
-        includes/CVCommon/IO.hpp src/CVCommon/IO.cpp )
-target_include_directories(${LIB_CV_COMMON} PRIVATE ${OpenCV_INCLUDE_DIRS})
-target_link_libraries(${LIB_CV_COMMON}
-        Eigen3::Eigen
-        ${OpenCV_LIBRARIES})
+set(EXE_TRIAL_TRY_OCC_MAP Trail_TryOccupancyMap)
+add_executable(${EXE_TRIAL_TRY_OCC_MAP}
+        src/Trials/TryOccupancyMap.cpp)
+#target_link_directories(${EXE_TRIAL_TRY_OCC_MAP} PRIVATE ${OCTOMAP_LIBRARY_DIRS})
+target_link_libraries(${EXE_TRIAL_TRY_OCC_MAP} Eigen3::Eigen
+        ${LIB_OCCUPANCY_MAP} ${PCL_LIBRARIES})
+
+set(EXE_TRIAL_TRY_OPENCV Trail_TryOpenCV)
+add_executable(${EXE_TRIAL_TRY_OPENCV}
+        src/Trials/TryOpenCV.cpp)
+target_link_libraries(${EXE_TRIAL_TRY_OPENCV} ${OpenCV_LIBRARIES})
 
 # ========== Applications. ==========
 
@@ -165,7 +201,12 @@ add_executable(${EXE_HOLE_BOUNDARY_PROJECTION}
         includes/PCCommon/IO.hpp
         src/HoleBoundaryDetection/HoleBoundaryProjection.cpp
         src/HoleBoundaryDetection/HoleBoundaryDetector.cpp)
-target_link_libraries(${EXE_HOLE_BOUNDARY_PROJECTION} Threads::Threads ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
+target_link_libraries(${EXE_HOLE_BOUNDARY_PROJECTION}
+        Threads::Threads
+        ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
+        Eigen3::Eigen
+        ${PCL_LIBRARIES}
+        ${OCTOMAP_LIBRARIES})
 
 set(EXE_HOLE_BOUNDARY_SAVE_POLYGON_COOR HoleBoundarySavePolygonCoor)
 add_executable(${EXE_HOLE_BOUNDARY_SAVE_POLYGON_COOR}

@@ -475,6 +475,8 @@ void HoleBoundaryProjector<pT, rT>::process(const typename PC_t::Ptr pInCloud,
                       << projectionCurvatureLimit << "). " << std::endl;
         }
     }
+
+    std::cout << hbp.size() <<" hole boundary polygons found. " << std::endl;
 }
 
 } // Namespace pcu.

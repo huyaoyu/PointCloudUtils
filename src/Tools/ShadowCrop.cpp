@@ -41,7 +41,7 @@ int main( int argc, char* argv[] ) {
     pcl::PointXYZ obbMinPoint, obbMaxPoint, obbPosition;
     Eigen::Matrix3f obbRotMat;
 
-    pcu::get_obb<pcl::PointXYZ>(pRef, obbMinPoint, obbMaxPoint, obbPosition, obbRotMat);
+    pcu::get_obb<pcl::PointXYZ, float>(pRef, obbMinPoint, obbMaxPoint, obbPosition, obbRotMat);
 
     std::cout << "oobMinPoint = " << std::endl << obbMinPoint << std::endl;
     std::cout << "oobMaxPoint = " << std::endl << obbMaxPoint << std::endl;

@@ -71,6 +71,12 @@ public:
     ProximityGraph<P_t>& get_proximity_graph();
     void set_criterion_computation_start_index(int idx);
     void set_criterion_params(float fA, float fH, float fS, float t);
+    /**
+     * Set the two corner points of the current point cloud section.
+     * @param corners A 6-element vector. (x0, y0, z0, x1, y1, z1).
+     */
+    void set_section_border_corners( const std::vector<float> &corners );
+    void set_section_border_threshold( float t );
     void set_normal_view_point(float x, float y, float z);
     void set_equivalent_normal_averaging_limit(int limit);
 
@@ -89,6 +95,7 @@ protected:
     void compute_criteria();
     void coherence_filter( std::vector<bool>& vbFlag, std::vector<int>& candidates );
     void coherence_filter();
+    void section_border_filter();
     void make_disjoint_boundary_candidates();
     void find_circles();
     void compute_centroid_and_equivalent_normal();
@@ -100,6 +107,8 @@ protected:
     float criterion_value( float ac, float hc, float sc );
     bool criterion_over_threshold( float ac, float hc, float sc );
     void find_candidates_by_criteria( std::vector<bool>& vbFlag, std::vector<int>& candidates );
+
+    bool is_near_border(const P_t &point);
 
     void map_indices_in_proximity_graph( ProximityGraph<P_t>& pg, const std::vector<int>& reference );
     void create_edges_from_points( const std::vector<int>& referenceIndices,
@@ -127,6 +136,10 @@ protected:
     float factorHalfDiscCriterion;
     float factorShapeCriterion;
     float criterionThreshold;
+
+    bool flagSectionBorder;
+    Eigen::MatrixXf sectionBorder; // 4x2 matrix stores the two conner points of a bounding box.
+    float sectionBorderThreshold;
 
     std::vector<int> boundaryCandidates;
     std::vector< std::vector<int> > disjointPointSets;
