@@ -136,6 +136,39 @@ static void parse_args(int argc, char* argv[], Args& args) {
     }
 }
 
+template < typename rT >
+static void write_cameras( const std::string &fn,
+        const std::vector<CameraProjection<rT>> &camProjs ) {
+    std::ofstream ofs(fn);
+
+    if ( !ofs.good() ) {
+        EXCEPTION_FILE_NOT_GOOD(fn)
+    }
+
+    const int N = camProjs.size();
+    assert( N > 0 );
+
+    const std::string TAB = "    ";
+
+    ofs << "{" << std::endl;
+    ofs << "\"camProjs\": [" << std::endl;
+
+    for ( int i = 0; i < N; ++i ) {
+        ofs << TAB;
+        camProjs[i].write_json_content(ofs, TAB, 1);
+
+        if ( i != N-1 ) {
+            ofs << "," << std::endl;
+        } else {
+            ofs << " ]" << std::endl;
+        }
+    }
+
+    ofs << "}" << std::endl;
+
+    ofs.close();
+}
+
 static void write_hole_polygon_points_json(
         const std::string &fn,
         const std::vector<pcu::HoleBoundaryPoints<float>> &hpp ) {
@@ -143,9 +176,7 @@ static void write_hole_polygon_points_json(
     std::ofstream ofs(fn);
 
     if ( !ofs.good() ) {
-        std::stringstream ss;
-        ss << fn << " is not good. ";
-        throw( std::runtime_error(ss.str()) );
+        EXCEPTION_FILE_NOT_GOOD(fn)
     }
 
     const int N = hpp.size();
@@ -208,7 +239,8 @@ template < typename pT, typename rT >
 static void filter_cameras_with_pc_bbox(
         typename pcl::PointCloud<pT>::Ptr pPC,
         const std::vector< CameraProjection<rT> > &inCamProjs,
-        std::vector< CameraProjection<rT> > &outCamProjs ) {
+        std::vector< CameraProjection<rT> > &outCamProjs,
+        const std::string &outDir="" ) {
     QUICK_TIME_START(te)
 
     std::cout << inCamProjs.size() << " cameras to filter against bbox of the input point cloud. " << std::endl;
@@ -218,6 +250,10 @@ static void filter_cameras_with_pc_bbox(
     // Compute the bounding box of the input point cloud.
     pcu::OBB<pT, rT> obb;
     pcu::get_obb<pT, rT>(pPC, obb);
+
+    // Test use.
+    std::cout << "obb: " << std::endl;
+    std::cout << obb << std::endl;
 
     // Find the 8 corners from the bbox.
     Eigen::MatrixX<rT> points;
@@ -232,6 +268,11 @@ static void filter_cameras_with_pc_bbox(
 
     // Test use.
     std::cout << "points = " << std::endl << points << std::endl;
+    if ( outDir != "" ) {
+        std::string outFn = outDir + "/BBoxPointsForFilteringCameras.csv";
+        write_matrix(outFn, points.transpose());
+        std::cout << "Saved " << outFn << ". " << std::endl;
+    }
 
     // Loop over all the cameras.
     QUICK_TIME_START(teLoop)
@@ -258,6 +299,8 @@ int main(int argc, char* argv[]) {
 
     // Handle the command line.
     MAIN_COMMON_LINES(argc, argv, args)
+
+    test_directory(args.outDir);
 
     print_bar("Read point cloud, disjoint boundary candidates, and camera pose files.");
     // Read the point cloud.
@@ -295,14 +338,25 @@ int main(int argc, char* argv[]) {
     set_image_size_for_camera_projection_objects( camProjOri, imgHeight, imgWidth );
 
     // Filter the cameras. Keep the cameras that can see the input point cloud's bounding box.
+    print_bar("Filter cameras against the bbox of the input point cloud.");
     std::vector< CameraProjection<float> > camProj;
-    filter_cameras_with_pc_bbox<pcl::PointNormal, float>(pInCloud, camProjOri, camProj);
+    filter_cameras_with_pc_bbox<pcl::PointNormal, float>(pInCloud, camProjOri, camProj, args.outDir);
+    {
+        std::string outFn = args.outDir + "/FilteredCamProjBBox.json";
+        write_cameras(outFn, camProj);
+    }
 
 //    // Test use.
 //    std::cout << "camProj.size() = " << camProj.size() << std::endl;
 //    std::cout << "camProj[ camProj.siz()-1 ].T = " << std::endl << camProj[ camProj.size()-1 ].T << std::endl;
 //    std::cout << "camProj[ camProj.siz()-1 ].K = " << std::endl << camProj[ camProj.size()-1 ].K << std::endl;
     std::cout << camProj[0] << std::endl;
+
+    // Build the occupancy map.
+
+
+
+
 
     print_bar("Project the boundary candidates.");
     // Hole boundary projector.
@@ -313,8 +367,6 @@ int main(int argc, char* argv[]) {
     std::vector< pcu::HoleBoundaryPoints<float> > holePolygonPoints;
 
     hbp.process( pInCloud, candidateSets, pEquivalentNormals, camProj, holePolygonPoints );
-
-    test_directory(args.outDir);
 
     {
         std::string outFn = args.outDir + "/HolePolygonPoints.json";

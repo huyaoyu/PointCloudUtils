@@ -18,6 +18,14 @@ namespace pcu
 {
 template < typename pT, typename rT >
 struct OBB {
+
+    friend std::ostream& operator << ( std::ostream& out, const OBB<pT, rT> &obb ) {
+        out << "minPoint: " << obb.minPoint << std::endl;
+        out << "maxPoint: " << obb.maxPoint << std::endl;
+        out << "position: " << obb.position << std::endl;
+        out << "rotMat: " << obb.rotMat;
+    }
+
     pT minPoint;
     pT maxPoint;
     pT position;

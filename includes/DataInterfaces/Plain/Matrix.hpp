@@ -15,6 +15,8 @@
 
 #include <Eigen/Dense>
 
+#include "Exception/Common.hpp"
+
 template < typename rT >
 void read_matrix( const std::string& fn, int rows, int cols, const std::string& delimiter,
         Eigen::MatrixX<rT>& mat ) {
@@ -69,6 +71,26 @@ void read_matrix( const std::string& fn, int rows, int cols, const std::string& 
     }
 
     ifs.close();
+}
+
+template < typename Derived >
+void write_matrix( const std::string &fn,
+        const Eigen::MatrixBase<Derived> &mat,
+        const std::string &delimiter="," ) {
+
+    std::ofstream ofs(fn);
+
+    if ( !ofs.good() ) {
+        EXCEPTION_FILE_NOT_GOOD(fn)
+    }
+
+    const Eigen::IOFormat CSVFormat(
+            Eigen::StreamPrecision, Eigen::DontAlignCols,
+            delimiter, "\n");
+
+    ofs << mat.format(CSVFormat);
+
+    ofs.close();
 }
 
 #endif //POINTCLOUDUTILS_INCLUDES_DATAINTERFACES_PLAIN_MATRIX_HPP

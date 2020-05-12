@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(PointCloudUtils)
+project(PointCloudUtils LANGUAGES CXX CUDA)
 
 #if(COMMAND cmake_policy)
 #    cmake_policy(SET CMP0003 NEW)
@@ -77,6 +77,12 @@ target_link_libraries(${LIB_OCCUPANCY_MAP}
         Eigen3::Eigen
         ${OCTOMAP_LIBRARIES}
         ${PCL_LIBRARIES})
+
+set(LIB_CUDA_OCP_BUILDER cuda_ocp_builder)
+add_library(${LIB_CUDA_OCP_BUILDER} STATIC
+        includes/HoleBoundaryDetection/CUDA/OccupancyMapBuilderRoutines.cu)
+target_compile_features(${LIB_CUDA_OCP_BUILDER} PUBLIC cxx_std_11)
+set_target_properties(${LIB_CUDA_OCP_BUILDER} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
 # ========== Tools. ==========
 
@@ -172,10 +178,16 @@ add_executable(${EXE_TRIAL_TRY_VECOTR} src/Trials/TryVector.cpp)
 
 set(EXE_TRIAL_TRY_OCC_MAP Trail_TryOccupancyMap)
 add_executable(${EXE_TRIAL_TRY_OCC_MAP}
-        src/Trials/TryOccupancyMap.cpp)
+        includes/HoleBoundaryDetection/CUDA/OccupancyMapBuilderRoutines.h
+        includes/HoleBoundaryDetection/OccupancyMapBuilder.hpp
+        src/Trials/OccupancyMap/TryOccupancyMap.cpp)
 #target_link_directories(${EXE_TRIAL_TRY_OCC_MAP} PRIVATE ${OCTOMAP_LIBRARY_DIRS})
-target_link_libraries(${EXE_TRIAL_TRY_OCC_MAP} Eigen3::Eigen
-        ${LIB_OCCUPANCY_MAP} ${PCL_LIBRARIES})
+set_target_properties(${EXE_TRIAL_TRY_OCC_MAP} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+target_link_libraries(${EXE_TRIAL_TRY_OCC_MAP}
+        ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
+        Eigen3::Eigen
+        ${LIB_OCCUPANCY_MAP} ${PCL_LIBRARIES}
+        ${LIB_CUDA_OCP_BUILDER})
 
 set(EXE_TRIAL_TRY_OPENCV Trail_TryOpenCV)
 add_executable(${EXE_TRIAL_TRY_OPENCV}

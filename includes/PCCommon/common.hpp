@@ -144,8 +144,8 @@ Eigen::Matrix4<rT> create_eigen_transform_matrix_1(
     Eigen::Vector3<rT> transVec;
     transVec << translation.x, translation.y, translation.z;
 
-    transMat.block(0,0,3,3) = rotation.inverse();
-    transMat( Eigen::seq(0,2), 3 ) = -rotation.inverse() * transVec;
+    transMat.block(0,0,3,3) = rotation.transpose();
+    transMat( Eigen::seq(0,2), 3 ) = -rotation.transpose() * transVec;
 
     return transMat;
 }

@@ -85,7 +85,7 @@ public:
         out << Args::AS_IN_LIDAR << ": " << args.inLiDAR << std::endl;
         out << Args::AS_IN_HOLE_PROJ << ": " << args.inHoleProj << std::endl;
         out << Args::AS_HOLE_ID << ": " << args.holeID << std::endl;
-        out << Args::AS_OUR_DIR << ": " << args.outDir << std::endl;
+        out << Args::AS_OUT_DIR << ": " << args.outDir << std::endl;
         out << Args::AS_CAM_SCALE << ": " << args.camScale << std::endl;
 
         return out;
@@ -97,7 +97,7 @@ public:
     static const std::string AS_IN_LIDAR;
     static const std::string AS_IN_HOLE_PROJ;
     static const std::string AS_HOLE_ID;
-    static const std::string AS_OUR_DIR;
+    static const std::string AS_OUT_DIR;
     static const std::string AS_CAM_SCALE;
 
 public:
@@ -115,7 +115,7 @@ const std::string Args::AS_IN_MVS_B = "inMVSBoundary";
 const std::string Args::AS_IN_LIDAR = "inLiDAR";
 const std::string Args::AS_IN_HOLE_PROJ = "inHoleProj";
 const std::string Args::AS_HOLE_ID = "holeID";
-const std::string Args::AS_OUR_DIR = "outDir";
+const std::string Args::AS_OUT_DIR = "outDir";
 const std::string Args::AS_CAM_SCALE = "cam-scale";
 
 static void parse_args(int argc, char* argv[], Args& args) {
@@ -131,7 +131,7 @@ static void parse_args(int argc, char* argv[], Args& args) {
                 (Args::AS_IN_LIDAR.c_str(), bpo::value< std::string >(&args.inLiDAR)->required(), "The input LiDAR point cloud.")
                 (Args::AS_IN_HOLE_PROJ.c_str(), bpo::value< std::string >(&args.inHoleProj)->required(), "The input JSON file that records the hole projection.")
                 (Args::AS_HOLE_ID.c_str(), bpo::value< int >(&args.holeID)->default_value(-1), "The single hole ID that needs to be processed. Use -1 of leave unset to process all hole IDs." )
-                (Args::AS_OUR_DIR.c_str(), bpo::value< std::string >(&args.outDir)->required(), "The output file.")
+                (Args::AS_OUT_DIR.c_str(), bpo::value< std::string >(&args.outDir)->required(), "The output file.")
                 (Args::AS_CAM_SCALE.c_str(), bpo::value< float >(&args.camScale)->default_value(1.0f), "The scale of the camera intrinsics. Positive floating point number.");
 
         bpo::positional_options_description posOptDesc;
@@ -139,7 +139,7 @@ static void parse_args(int argc, char* argv[], Args& args) {
         ).add(Args::AS_IN_MVS_B.c_str(), 1
         ).add(Args::AS_IN_LIDAR.c_str(), 1
         ).add(Args::AS_IN_HOLE_PROJ.c_str(), 1
-        ).add(Args::AS_OUR_DIR.c_str(), 1);
+        ).add(Args::AS_OUT_DIR.c_str(), 1);
 
         bpo::variables_map optVM;
         bpo::store(bpo::command_line_parser(argc, argv).

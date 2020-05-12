@@ -575,7 +575,7 @@ public:
         out << Args::AS_IN_MVS << ": " << args.inMVS << std::endl;
         out << Args::AS_IN_LIDAR << ": " << args.inLiDAR << std::endl;
         out << Args::AS_IN_BP << ": " << args.inBP << std::endl;
-        out << Args::AS_OUR_DIR << ": " << args.outDir << std::endl;
+        out << Args::AS_OUT_DIR << ": " << args.outDir << std::endl;
         out << Args::AS_F_MVS << ": " << args.fMVS << std::endl;
         out << Args::AS_F_LIDAR << ": " << args.fLiDAR << std::endl;
         out << Args::AS_F_PRIOR << ": " << args.fPrior << std::endl;
@@ -589,7 +589,7 @@ public:
     static const std::string AS_IN_MVS;
     static const std::string AS_IN_LIDAR;
     static const std::string AS_IN_BP;
-    static const std::string AS_OUR_DIR;
+    static const std::string AS_OUT_DIR;
     static const std::string AS_F_MVS;
     static const std::string AS_F_LIDAR;
     static const std::string AS_F_PRIOR;
@@ -611,7 +611,7 @@ const std::string Args::AS_IN_PARAM = "inParam";
 const std::string Args::AS_IN_MVS   = "inMVS";
 const std::string Args::AS_IN_LIDAR = "inLiDAR";
 const std::string Args::AS_IN_BP    = "inBP";
-const std::string Args::AS_OUR_DIR  = "outDir";
+const std::string Args::AS_OUT_DIR  = "outDir";
 const std::string Args::AS_F_MVS    = "f-mvs";
 const std::string Args::AS_F_LIDAR  = "f-lidar";
 const std::string Args::AS_F_PRIOR  = "f-prior";
@@ -630,7 +630,7 @@ static void parse_args(int argc, char* argv[], Args& args) {
                 (Args::AS_IN_MVS.c_str(), bpo::value< std::string >(&args.inMVS)->required(), "Pixel table of the MVS points. ")
                 (Args::AS_IN_LIDAR.c_str(), bpo::value< std::string >(&args.inLiDAR)->required(), "Pixel table of the LiDAR points. ")
                 (Args::AS_IN_BP.c_str(), bpo::value< std::string >(&args.inBP)->required(), "The table of boundary pixels.")
-                (Args::AS_OUR_DIR.c_str(), bpo::value< std::string >(&args.outDir)->required(), "The output file. ")
+                (Args::AS_OUT_DIR.c_str(), bpo::value< std::string >(&args.outDir)->required(), "The output file. ")
                 (Args::AS_F_MVS.c_str(), bpo::value< double >(&args.fMVS)->default_value(1.0), "The cost factor for MVS point.")
                 (Args::AS_F_LIDAR.c_str(), bpo::value< double >(&args.fLiDAR)->default_value(1.0), "The cost factor for LiDAR point.")
                 (Args::AS_F_PRIOR.c_str(), bpo::value< double >(&args.fPrior)->default_value(1.0), "The cost factor for prior.")
@@ -641,7 +641,7 @@ static void parse_args(int argc, char* argv[], Args& args) {
         ).add(Args::AS_IN_MVS.c_str(), 1
         ).add(Args::AS_IN_LIDAR.c_str(), 1
         ).add(Args::AS_IN_BP.c_str(), 1
-        ).add(Args::AS_OUR_DIR.c_str(), 1);
+        ).add(Args::AS_OUT_DIR.c_str(), 1);
 
         bpo::variables_map optVM;
         bpo::store(bpo::command_line_parser(argc, argv).

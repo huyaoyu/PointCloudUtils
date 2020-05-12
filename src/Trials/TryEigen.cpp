@@ -241,5 +241,18 @@ int main( int argc, char* argv[] ) {
         std::cout << "v0 = " << v0 << std::endl;
     }
 
+    {
+        // Temp test.
+        Eigen::Matrix3f K;
+        K << 4877.75, 0, 2117.07007, 0, 4877.75, 1507.23999, 0, 0, 1;
+        Eigen::Vector3f sp;
+        sp << -0.99140209, 0.218834817, 2.28696632;
+
+        Eigen::Vector3f pixel = K * sp.eval();
+        std::cout << "K = \n" << K << std::endl;
+        std::cout << "sp = \n" << sp << std::endl;
+        std::cout << "pixel = \n" << pixel << std::endl;
+    }
+
     return 0;
 }

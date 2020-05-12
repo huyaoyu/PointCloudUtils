@@ -16,6 +16,7 @@
 #include <Eigen/Dense>
 
 #include "DataInterfaces/Plain/FromVector.hpp"
+#include "Profiling/Instrumentor.hpp"
 
 template < typename rT >
 class CameraProjection {
@@ -26,7 +27,9 @@ public:
       R( Eigen::Matrix3<rT>::Identity() ),
       T( Eigen::Vector3<rT>::Zero() ),
       Q( Eigen::Quaternion<rT>( 1.0, 0.0, 0.0, 0.0 ) ),
-      height(3008), width(4112), id(-1) {}
+      height(3008), width(4112), id(-1) {
+        RCtRt = RC.transpose() * R.transpose();
+    }
 
     CameraProjection( const CameraProjection<rT>& other ) {
         this->K  = other.K;
@@ -39,6 +42,8 @@ public:
         this->width  = other.width;
 
         this->id = other.id;
+
+        this->RCtRt = this->RC.transpose() * this->R.transpose();
 
         for ( int i = 0; i < 4; ++i ) {
             this->frustumNormals[i] = other.frustumNormals[i];
@@ -63,12 +68,18 @@ public:
 
         this->id = other.id;
 
+        this->RCtRt = this->RC.transpose() * this->R.transpose();
+
         for ( int i = 0; i < 4; ++i ) {
             this->frustumNormals[i] = other.frustumNormals[i];
         }
 
         return *this;
     }
+
+    void set_R(const Eigen::Matrix3<rT> &r);
+    void set_RC(const Eigen::Matrix3<rT> &rc);
+    void update_RCtRt();
 
     void update_frustum_normals(void);
     void scale_intrinsics(rT s);
@@ -89,8 +100,15 @@ public:
     void sensor_2_pixel( const Eigen::Vector3<rT>& sp,
             Eigen::Vector3<rT> &pixel ) const;
 
+    void world_2_sensor( const Eigen::Vector3<rT> &wp,
+                         Eigen::Vector3<rT> &sp ) const;
+
     void world_2_pixel( const Eigen::Vector3<rT>& wp,
                        Eigen::Vector3<rT>& pixel ) const;
+
+    void world_2_pixel( const Eigen::Vector3<rT> &wp,
+                        Eigen::Vector3<rT> &sp,
+                        Eigen::Vector3<rT> &pixel ) const;
 
     void pixel_2_sensor( const Eigen::Vector3<rT> &pixelWithDepth,
             Eigen::Vector3<rT> &sp ) const;
@@ -174,10 +192,28 @@ public:
 
     int id;
 
+    Eigen::Matrix3<rT> RCtRt;
     Eigen::Vector3<rT> frustumNormals[4];
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
+
+template < typename rT >
+void CameraProjection<rT>::set_R(const Eigen::Matrix3<rT> &r) {
+    R = r;
+    update_RCtRt();
+}
+
+template < typename rT >
+void CameraProjection<rT>::set_RC(const Eigen::Matrix3<rT> &rc) {
+    RC = R;
+    update_RCtRt();
+}
+
+template < typename rT >
+void CameraProjection<rT>::update_RCtRt() {
+    RCtRt = RC.transpose() * R.transpose();
+}
 
 template < typename rT >
 void CameraProjection<rT>::update_frustum_normals(void) {
@@ -243,19 +279,20 @@ void CameraProjection<rT>::get_z_axis( rT &nx, rT &ny, rT &nz ) const {
 
 template < typename rT >
 void CameraProjection<rT>::world_2_camera(const Eigen::Vector3<rT> &wp, Eigen::Vector3<rT> &cp) const {
+//    PROFILE_FUNCTION()
     cp = R.transpose() * ( wp.eval() - T);
 }
 
 template < typename rT >
 void CameraProjection<rT>::camera_2_pixel(const Eigen::Vector3<rT> &cp, Eigen::Vector3<rT> &pixel) const {
     Eigen::Vector3<rT> sensorPoint = RC.transpose() * cp;
-
     sensor_2_pixel(sensorPoint, pixel);
 }
 
 template < typename rT >
 void CameraProjection<rT>::sensor_2_pixel( const Eigen::Vector3<rT>& sp,
                      Eigen::Vector3<rT> &pixel ) const {
+//    PROFILE_FUNCTION()
     if ( sp(2) <= 0 ) {
         std::stringstream ss;
         ss << "Point " << sp << " is located at the back of the camera. ";
@@ -274,6 +311,21 @@ void CameraProjection<rT>::world_2_pixel(const Eigen::Vector3<rT> &wp, Eigen::Ve
     Eigen::Vector3<rT> cp;
     world_2_camera(wp, cp);
     camera_2_pixel(cp, pixel);
+}
+
+template < typename rT >
+void CameraProjection<rT>::world_2_pixel( const Eigen::Vector3<rT> &wp,
+                    Eigen::Vector3<rT> &sp,
+                    Eigen::Vector3<rT> &pixel ) const {
+
+    world_2_sensor(wp, sp);
+    sensor_2_pixel(sp, pixel);
+}
+
+template < typename rT >
+void CameraProjection<rT>::world_2_sensor( const Eigen::Vector3<rT> &wp,
+                     Eigen::Vector3<rT> &sp ) const {
+    sp = RCtRt * ( wp.eval() - T);
 }
 
 template < typename rT >
@@ -332,8 +384,8 @@ void CameraProjection<rT>::pixel_2_world(const Eigen::MatrixX<rT> &pixelsWithDep
 
 template < typename rT >
 bool CameraProjection<rT>::is_camera_point_in_image(const Eigen::Vector3<rT> &cp) const {
+//    PROFILE_FUNCTION()
     Eigen::Vector3<rT> sensorPoint = RC.transpose() * cp;
-
     if ( sensorPoint(2) <= 0 ) {
         return false;
     }
@@ -357,7 +409,6 @@ template < typename rT >
 bool CameraProjection<rT>::is_world_point_in_image(const Eigen::Vector3<rT> &wp) const {
     Eigen::Vector3<rT> cp;
     world_2_camera(wp, cp);
-
     return is_camera_point_in_image(cp);
 }
 
