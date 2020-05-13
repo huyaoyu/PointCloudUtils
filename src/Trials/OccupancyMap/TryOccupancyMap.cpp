@@ -395,26 +395,11 @@ int main(int argc, char** argv) {
         build_occupancy_map<pcl::PointXYZ, float>( pMerged, camProjs, ocMap );
     }
 
-
-
-
-//    // Origin of sensor.
-//    Eigen::Vector3f origin;
-//    Eigen::Vector4f centroid;
-//    pcl::compute3DCentroid(*pMerged, centroid);
-//    origin << centroid(0), centroid(1), centroid(2);
-//
-//    // Insert point cloud to the occupancy map.
-//    QUICK_TIME_START(teInsert)
-//    ocMap.insert_point_cloud<pcl::PointXYZ>(pMerged, origin);
-//    QUICK_TIME_END(teInsert)
-//    std::cout << "Insert in " << teInsert << " ms. " << std::endl;
-//
-//    // Write the occupancy map.
-//    {
-//        std::string outFn = args.outDir + "/OcMap.bt";
-//        ocMap.write(outFn);
-//    }
+    // Write the occupancy map.
+    {
+        std::string outFn = args.outDir + "/OcMap.bt";
+        ocMap.write(outFn);
+    }
 
     return 0;
 }

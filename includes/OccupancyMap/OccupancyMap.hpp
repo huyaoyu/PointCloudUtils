@@ -54,6 +54,9 @@ public:
     void insert_point_cloud( typename pcl::PointCloud<pT>::Ptr pInput,
                              const Eigen::Vector3f &sensorWP );
 
+    void insert_point_cloud( const octomap::Pointcloud &opc,
+            const octomap::point3d origin);
+
     void read(const std::string &fn);
     void write(const std::string &fn);
 
@@ -143,6 +146,11 @@ void OccupancyMap::insert_point_cloud( typename pcl::PointCloud<pT>::Ptr pInput,
     octomap::point3d origin( sensorWP(0), sensorWP(1), sensorWP(2) );
 
     pOcTree->insertPointCloud( *pPC, origin );
+}
+
+void OccupancyMap::insert_point_cloud( const octomap::Pointcloud &opc,
+                         const octomap::point3d origin) {
+    pOcTree->insertPointCloud( opc, origin );
 }
 
 }

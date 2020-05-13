@@ -53,11 +53,16 @@ protected:
                                       const CReal *depthMap,
                                       const int *maskIdxMap,
                                       std::uint8_t *visMask ) const;
+    template < typename pT >
+    void convert_pcl_2_octomap_by_vis_mask( const pcl::PointCloud<pT> &pclPC,
+            const std::uint8_t *visMask, octomap::Pointcloud &opc, int nApproximateVisible=0 ) const;
 
 protected:
     rT occThreshold;
     int knnK;
     int knnOcc;
+
+    OccupancyMap ocMap; // The occupancy map.
 };
 
 template < typename rT >
@@ -189,10 +194,34 @@ int OccupancyMapBuilder<rT>::update_visibility_mask_by_2D( const pcl::PointCloud
 
 template < typename rT >
 template < typename pT >
+void OccupancyMapBuilder<rT>::convert_pcl_2_octomap_by_vis_mask(
+        const pcl::PointCloud<pT> &pclPC, const std::uint8_t *visMask,
+        octomap::Pointcloud &opc, int nApproximateVisible ) const {
+    const int N = pclPC.size(); assert( N > 0 );
+    // Reserve memory for the octomap::Pointcloud object.
+    if ( nApproximateVisible <= 0 ) {
+        opc.reserve(N);
+    } else {
+        opc.reserve(nApproximateVisible);
+    }
+
+    // Fill opc by referring to visMask.
+    for ( int i = 0; i < N; ++i) {
+        if ( visMask[i] == OCP_MAP_CAM_VISIBLE ) {
+            const pT &point = pclPC[i];
+            opc.push_back( octomap::point3d(
+                    point.x, point.y, point.z ) );
+        }
+    }
+}
+
+template < typename rT >
+template < typename pT >
 void OccupancyMapBuilder<rT>::build_occupancy_map(
         const typename pcl::PointCloud<pT>::Ptr pInCloud,
         const std::vector<CameraProjection<rT> > &camProjs,
         pcu::OccupancyMap &ocpMap) {
+    QUICK_TIME_START(teBuild)
     const int N = pInCloud->size();
 
     // Convert everything into CReal type.
@@ -209,13 +238,13 @@ void OccupancyMapBuilder<rT>::build_occupancy_map(
 
     const int nC = camProjs.size();
     for ( int i = 0; i < nC; ++i ) {
-        std::cout << i << ": Camera id " << camProjs[i].id << ". " ;
+        std::cout << i << ": Cam ID " << camProjs[i].id << ". " ;
         copy_cam_proj_params( camProjs[i], crVisMask.get_u_cam_proj() );
         crVisMask.set_cam_proj_size( camProjs[i].height, camProjs[i].width );
         QUICK_TIME_START(teCrVisMask)
         crVisMask.cr_update_visibility_mask();
         QUICK_TIME_END(teCrVisMask)
-        std::cout << "Projection in " << teCrVisMask << " ms. ";
+        std::cout << "Proj " << teCrVisMask << " ms. ";
 
         pcl::PointCloud<pcl::PointXY>::Ptr pPC2D (new pcl::PointCloud<pcl::PointXY>);
         collect_depth_mask_and_pcl_point_cloud(
@@ -229,17 +258,32 @@ void OccupancyMapBuilder<rT>::build_occupancy_map(
 
         // Update visibility map.
         QUICK_TIME_START(teUpdateVisMask)
-        std::cout << "Check local occlusion for " << bfSize << " points. ";
+        std::cout << "Local occ chk " << bfSize << ". ";
         int nVisible = update_visibility_mask_by_2D( pPC2D, bfDepthMap, bfMaskIdxMap, crVisMask.get_vis_mask() );
         QUICK_TIME_END(teUpdateVisMask)
-        std::cout << nVisible << " points visible. "
-                  << "2D point cloud in "
-                  << teUpdateVisMask << " ms. " << std::endl;
+        std::cout << nVisible << " visible. "<< teUpdateVisMask << " ms. ";
+
+        // Create octomap::Pointcloud.
+        octomap::Pointcloud ocPC;
+        convert_pcl_2_octomap_by_vis_mask( *pInCloud, crVisMask.get_vis_mask(), ocPC, nVisible );
+
+        // Origin point for an octomap::Pointcloud object.
+        const Eigen::Vector3f &camT = camProjs[i].T;
+        octomap::point3d origin( camT(0), camT(1), camT(2) );
+
+        // Insert the point cloud into the current octomap.
+        QUICK_TIME_START(teInsertPC)
+        ocpMap.insert_point_cloud( ocPC, origin );
+        QUICK_TIME_END(teInsertPC)
+        std::cout << "Insert to octomap " << teInsertPC << " ms. " << std::endl;
     }
 
     // Clean up.
     delete [] bfMaskIdxMap;
     delete [] bfDepthMap;
+
+    QUICK_TIME_END(teBuild)
+    std::cout << "Build the occupancy map in " << teBuild << " ms. " << std::endl;
 }
 
 } // namespace pcu
