@@ -56,7 +56,13 @@ message(STATUS "yaml-cpp_FOUND=${yaml-cpp_FOUND}")
 message(STATUS "YAML_CPP_INCLUDE_DIR=${yaml_cpp_INCLUDE_DIR}")
 message(STATUS "YAML_CPP_LIBRARIES=${YAML_CPP_LIBRARIES}")
 
-include_directories(includes)
+# CUDA.
+find_package(CUDA REQUIRED)
+message(STATUS "CUDA_INCLUDE_DIRS=${CUDA_INCLUDE_DIRS}")
+
+include_directories(
+        includes
+        ${CUDA_INCLUDE_DIRS})
 
 # ========== Local libraries. ==========
 
@@ -68,21 +74,26 @@ target_link_libraries(${LIB_CV_COMMON}
         Eigen3::Eigen
         ${OpenCV_LIBRARIES})
 
+set(LIB_CUDA_OCP_BUILDER cuda_ocp_builder)
+add_library(${LIB_CUDA_OCP_BUILDER} STATIC
+        includes/OccupancyMap/CUDA/OccupancyMapBuilderRoutines.cu)
+target_compile_features(${LIB_CUDA_OCP_BUILDER} PUBLIC cxx_std_11)
+set_target_properties(${LIB_CUDA_OCP_BUILDER} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+
+#find_package(Thrust REQUIRED CONFIG PATHS /usr/local/cuda-10.1/include/thrust/cmake)
+#thrust_create_target(Thrust)
+
 set(LIB_OCCUPANCY_MAP occupancy_map)
-add_library(${LIB_OCCUPANCY_MAP} SHARED
+add_library(${LIB_OCCUPANCY_MAP} STATIC
         includes/OccupancyMap/OccupancyMap.hpp src/OccupancyMap/OccupancyMap.cpp )
+set_target_properties(${LIB_OCCUPANCY_MAP} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 target_include_directories(${LIB_OCCUPANCY_MAP} PUBLIC ${OCTOMAP_INCLUDE_DIRS})
 target_link_directories(${LIB_OCCUPANCY_MAP} PUBLIC ${OCTOMAP_LIBRARY_DIRS})
 target_link_libraries(${LIB_OCCUPANCY_MAP}
         Eigen3::Eigen
         ${OCTOMAP_LIBRARIES}
-        ${PCL_LIBRARIES})
-
-set(LIB_CUDA_OCP_BUILDER cuda_ocp_builder)
-add_library(${LIB_CUDA_OCP_BUILDER} STATIC
-        includes/HoleBoundaryDetection/CUDA/OccupancyMapBuilderRoutines.cu)
-target_compile_features(${LIB_CUDA_OCP_BUILDER} PUBLIC cxx_std_11)
-set_target_properties(${LIB_CUDA_OCP_BUILDER} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+        ${PCL_LIBRARIES}
+        ${LIB_CUDA_OCP_BUILDER})
 
 # ========== Tools. ==========
 
@@ -160,36 +171,40 @@ add_executable(${EXE_JSON_TRY_JSON}
         src/HoleBoundaryDetection/HoleBoundaryDetector.cpp)
 target_link_libraries(${EXE_JSON_TRY_JSON} Eigen3::Eigen ${PCL_LIBRARIES})
 
-set(EXE_TRIAL_TRY_EIGEN Trail_TryEigen)
+set(EXE_TRIAL_TRY_EIGEN Trial_TryEigen)
 add_executable(${EXE_TRIAL_TRY_EIGEN}
         src/Trials/TryEigen.cpp)
 target_link_libraries(${EXE_TRIAL_TRY_EIGEN} Eigen3::Eigen ${PCL_LIBRARIES})
 
-set(EXE_TRIAL_TRY_SMART_POINTER Trail_TrySmartPointer)
+set(EXE_TRIAL_TRY_SMART_POINTER Trial_TrySmartPointer)
 add_executable(${EXE_TRIAL_TRY_SMART_POINTER}
         src/Trials/TrySmartPointer.cpp)
 #target_link_libraries(${EXE_TRIAL_TRY_SMART_POINTER})
 
-set(EXE_TRIAL_TRY_CMATH Trail_TryCMath)
+set(EXE_TRIAL_TRY_CMATH Trial_TryCMath)
 add_executable(${EXE_TRIAL_TRY_CMATH} src/Trials/TryCMath.cpp)
 
-set(EXE_TRIAL_TRY_VECOTR Trail_TryVector)
+set(EXE_TRIAL_TRY_VECOTR Trial_TryVector)
 add_executable(${EXE_TRIAL_TRY_VECOTR} src/Trials/TryVector.cpp)
 
-set(EXE_TRIAL_TRY_OCC_MAP Trail_TryOccupancyMap)
-add_executable(${EXE_TRIAL_TRY_OCC_MAP}
-        includes/HoleBoundaryDetection/CUDA/OccupancyMapBuilderRoutines.h
-        includes/HoleBoundaryDetection/OccupancyMapBuilder.hpp
-        src/Trials/OccupancyMap/TryOccupancyMap.cpp)
-#target_link_directories(${EXE_TRIAL_TRY_OCC_MAP} PRIVATE ${OCTOMAP_LIBRARY_DIRS})
-set_target_properties(${EXE_TRIAL_TRY_OCC_MAP} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-target_link_libraries(${EXE_TRIAL_TRY_OCC_MAP}
+set(EXE_TRIAL_TRY_OCTO_MAP Trial_TryOctoMap)
+add_executable(${EXE_TRIAL_TRY_OCTO_MAP}
+        src/Trials/OccupancyMap/TryOctoMap.cpp)
+#target_link_directories(${EXE_TRIAL_TRY_OCTO_MAP} PRIVATE ${OCTOMAP_LIBRARY_DIRS})
+set_target_properties(${EXE_TRIAL_TRY_OCTO_MAP} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+target_link_libraries(${EXE_TRIAL_TRY_OCTO_MAP}
         ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
         Eigen3::Eigen
         ${LIB_OCCUPANCY_MAP} ${PCL_LIBRARIES}
         ${LIB_CUDA_OCP_BUILDER})
 
-set(EXE_TRIAL_TRY_OPENCV Trail_TryOpenCV)
+set(EXE_TRIAL_TRY_OCC_MAP Trial_TryOccMap)
+add_executable(${EXE_TRIAL_TRY_OCC_MAP} src/Trials/OccupancyMap/TryOccupancyMap.cpp)
+set_target_properties(${EXE_TRIAL_TRY_OCC_MAP} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+target_link_libraries(${EXE_TRIAL_TRY_OCC_MAP} Eigen3::Eigen
+        ${LIB_OCCUPANCY_MAP})
+
+set(EXE_TRIAL_TRY_OPENCV Trial_TryOpenCV)
 add_executable(${EXE_TRIAL_TRY_OPENCV}
         src/Trials/TryOpenCV.cpp)
 target_link_libraries(${EXE_TRIAL_TRY_OPENCV} ${OpenCV_LIBRARIES})

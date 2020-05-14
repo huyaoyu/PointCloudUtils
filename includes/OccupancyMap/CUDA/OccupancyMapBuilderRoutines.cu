@@ -2,7 +2,10 @@
 // Created by yaoyu on 5/11/20.
 //
 
-#include "HoleBoundaryDetection/CUDA/OccupancyMapBuilderRoutines.h"
+#include <thrust/host_vector.h>
+#include <thrust/device_vector.h>
+
+#include "OccupancyMapBuilderRoutines.h"
 
 const int N_THREADS_PER_BLOCK=256;
 
@@ -32,7 +35,7 @@ __global__
 void g_update_visibility_mask(
         CReal* pc, int nPc,
         CReal* camProj, int height, int width,
-        std::uint8_t* visMask,
+        CMask* visMask,
         CReal *pixels ) {
     const int index  = blockIdx.x * blockDim.x + threadIdx.x;
     const int stride = blockDim.x * gridDim.x;
@@ -113,7 +116,7 @@ CR_VisMask::CR_VisMask(int n)
     const int sizeCamProj = sizeMat * 2 + sizeVec;
     cudaMallocManaged(&uCamProj, sizeCamProj * sizeof(CReal));
 
-    cudaMallocManaged(&uVisMask, nPCPoints * sizeof(std::uint8_t));
+    cudaMallocManaged(&uVisMask, nPCPoints * sizeof(CMask));
     cudaMallocManaged(&uPixels, size * sizeof(CReal));
 }
 
@@ -178,10 +181,22 @@ int CR_VisMask::cr_update_visibility_mask() {
     return 0;
 }
 
-std::uint8_t* CR_VisMask::get_vis_mask() {
+CMask* CR_VisMask::get_vis_mask() {
     return uVisMask;
 }
 
 CReal* CR_VisMask::get_pixels() {
     return uPixels;
+}
+
+// ============================================================
+
+void CR_DenseGrid::resize(std::size_t nx, std::size_t ny, std::size_t nz) {
+    denseGrid.resize( nz * ny * nx );
+    thrust::fill( denseGrid.begin(), denseGrid.end(), OCP_MAP_OCC_UNKNOWN );
+    std::cout << "denseGrid.size() = " << denseGrid.size() << std::endl;
+}
+
+CMask* CR_DenseGrid::get_dense_grid() {
+    return thrust::raw_pointer_cast( denseGrid.data() );
 }

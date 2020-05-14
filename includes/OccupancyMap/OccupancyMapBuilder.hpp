@@ -15,12 +15,13 @@
 #include <pcl/point_cloud.h>
 #include <pcl/kdtree/kdtree_flann.h>
 
+#include <octomap/OcTree.h>
+
 #include "CameraGeometry/CameraProjection.hpp"
 #include "Exception/Common.hpp"
-#include "OccupancyMap/OccupancyMap.hpp"
 #include "Profiling/SimpleTime.hpp"
 
-#include "HoleBoundaryDetection/CUDA/OccupancyMapBuilderRoutines.h"
+#include "CUDA/OccupancyMapBuilderRoutines.h"
 
 namespace pcu
 {
@@ -38,7 +39,7 @@ public:
     template < typename pT >
     void build_occupancy_map(const typename pcl::PointCloud<pT>::Ptr pInCloud,
                              const std::vector< CameraProjection<rT> > &camProjs,
-                             pcu::OccupancyMap &ocpMap );
+                             octomap::OcTree &ocTree );
 
 protected:
     template < typename pT >
@@ -46,23 +47,21 @@ protected:
             const pcl::PointCloud<pT> &pc ) const;
 
     void copy_cam_proj_params(const CameraProjection<rT> &camProj, CReal *cp) const;
-    void collect_depth_mask_and_pcl_point_cloud(const std::uint8_t *visMask, const CReal *pixels,
+    void collect_depth_mask_and_pcl_point_cloud(const CMask *visMask, const CReal *pixels,
             int n, CReal *bfDepthMap, int *bfMaskIdxMap, int &bfSize,
             pcl::PointCloud<pcl::PointXY> &pc ) const;
     int update_visibility_mask_by_2D( const pcl::PointCloud<pcl::PointXY>::Ptr pPC,
                                       const CReal *depthMap,
                                       const int *maskIdxMap,
-                                      std::uint8_t *visMask ) const;
+                                      CMask *visMask ) const;
     template < typename pT >
     void convert_pcl_2_octomap_by_vis_mask( const pcl::PointCloud<pT> &pclPC,
-            const std::uint8_t *visMask, octomap::Pointcloud &opc, int nApproximateVisible=0 ) const;
+            const CMask *visMask, octomap::Pointcloud &opc, int nApproximateVisible=0 ) const;
 
 protected:
     rT occThreshold;
     int knnK;
     int knnOcc;
-
-    OccupancyMap ocMap; // The occupancy map.
 };
 
 template < typename rT >
@@ -121,7 +120,7 @@ void OccupancyMapBuilder<rT>::copy_cam_proj_params(
 
 template < typename rT >
 void OccupancyMapBuilder<rT>::collect_depth_mask_and_pcl_point_cloud(
-        const std::uint8_t *visMask, const CReal *pixels,
+        const CMask *visMask, const CReal *pixels,
         int n, CReal *bfDepthMap, int *bfMaskIdxMap, int &bfSize,
         pcl::PointCloud<pcl::PointXY> &pc ) const {
     bfSize = 0;
@@ -143,7 +142,7 @@ template < typename rT >
 int OccupancyMapBuilder<rT>::update_visibility_mask_by_2D( const pcl::PointCloud<pcl::PointXY>::Ptr pPC,
                                   const CReal *depthMap,
                                   const int *maskIdxMap,
-                                  std::uint8_t *visMask ) const {
+                                  CMask *visMask ) const {
     // Create a KD-Tree.
     pcl::KdTreeFLANN<pcl::PointXY>::Ptr tree ( new pcl::KdTreeFLANN<pcl::PointXY> );
     tree->setInputCloud(pPC);
@@ -195,7 +194,7 @@ int OccupancyMapBuilder<rT>::update_visibility_mask_by_2D( const pcl::PointCloud
 template < typename rT >
 template < typename pT >
 void OccupancyMapBuilder<rT>::convert_pcl_2_octomap_by_vis_mask(
-        const pcl::PointCloud<pT> &pclPC, const std::uint8_t *visMask,
+        const pcl::PointCloud<pT> &pclPC, const CMask *visMask,
         octomap::Pointcloud &opc, int nApproximateVisible ) const {
     const int N = pclPC.size(); assert( N > 0 );
     // Reserve memory for the octomap::Pointcloud object.
@@ -220,7 +219,7 @@ template < typename pT >
 void OccupancyMapBuilder<rT>::build_occupancy_map(
         const typename pcl::PointCloud<pT>::Ptr pInCloud,
         const std::vector<CameraProjection<rT> > &camProjs,
-        pcu::OccupancyMap &ocpMap) {
+        octomap::OcTree &ocTree) {
     QUICK_TIME_START(teBuild)
     const int N = pInCloud->size();
 
@@ -273,7 +272,7 @@ void OccupancyMapBuilder<rT>::build_occupancy_map(
 
         // Insert the point cloud into the current octomap.
         QUICK_TIME_START(teInsertPC)
-        ocpMap.insert_point_cloud( ocPC, origin );
+        ocTree.insertPointCloud( ocPC, origin );
         QUICK_TIME_END(teInsertPC)
         std::cout << "Insert to octomap " << teInsertPC << " ms. " << std::endl;
     }

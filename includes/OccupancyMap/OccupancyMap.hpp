@@ -22,6 +22,9 @@
 #include <pcl/PointIndices.h>
 
 #include "Exception/Common.hpp"
+#include "CameraGeometry/CameraProjection.hpp"
+
+#include "OccupancyMapBuilder.hpp"
 
 struct OccupancyMapException : virtual exception_common_base {};
 struct CoordinateCheckFailed : virtual OccupancyMapException {};
@@ -42,8 +45,15 @@ public:
     ~OccupancyMap();
 
     void initialize(float res);
+    octomap::OcTree& get_octree();
 
     void set_basic_parameters( float res, float probH, float probM, float clampMin, float clampMax );
+
+    template < typename pT, typename rT >
+    void build_from_pcl_and_cam_proj(const typename pcl::PointCloud<pT>::Ptr pInCloud,
+                                     const std::vector<CameraProjection<rT> > &camProjs);
+
+    void find_frontiers();
 
     template < typename pT >
     void insert_point_cloud( typename pcl::PointCloud<pT>::Ptr pInput,
@@ -53,9 +63,6 @@ public:
     template < typename pT >
     void insert_point_cloud( typename pcl::PointCloud<pT>::Ptr pInput,
                              const Eigen::Vector3f &sensorWP );
-
-    void insert_point_cloud( const octomap::Pointcloud &opc,
-            const octomap::point3d origin);
 
     void read(const std::string &fn);
     void write(const std::string &fn);
@@ -72,6 +79,12 @@ protected:
             typename pcl::PointCloud<pT>::Ptr pInput,
             const pcl::PointIndices::Ptr pIndices);
 
+    void get_dense_grid_index( const double* minPoint,
+            const octomap::point3d &point,
+            std::size_t *index );
+
+    void traverse_octree_and_fill_dense_grid( CMask *denseGrid );
+
 protected:
     std::shared_ptr<octomap::OcTree> pOcTree;
 
@@ -80,7 +93,19 @@ protected:
     float probMiss;
     float clampingThresholdMin;
     float clampingThresholdMax;
+
+    std::size_t vx;
+    std::size_t vy;
+    std::size_t vz;
 };
+
+template < typename pT, typename rT >
+void OccupancyMap::build_from_pcl_and_cam_proj(
+        const typename pcl::PointCloud<pT>::Ptr pInCloud,
+        const std::vector<CameraProjection<rT> > &camProjs) {
+    OccupancyMapBuilder<rT> omb;
+    omb.template build_occupancy_map<pT>(pInCloud, camProjs, *pOcTree);
+}
 
 template < typename pT >
 std::shared_ptr<octomap::Pointcloud> OccupancyMap::convert_pcl_2_pc(
@@ -146,11 +171,6 @@ void OccupancyMap::insert_point_cloud( typename pcl::PointCloud<pT>::Ptr pInput,
     octomap::point3d origin( sensorWP(0), sensorWP(1), sensorWP(2) );
 
     pOcTree->insertPointCloud( *pPC, origin );
-}
-
-void OccupancyMap::insert_point_cloud( const octomap::Pointcloud &opc,
-                         const octomap::point3d origin) {
-    pOcTree->insertPointCloud( opc, origin );
 }
 
 }
