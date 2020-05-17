@@ -26,6 +26,7 @@ int main(int argc, char** argv) {
     std::cout << "Input octomap is " << argv[1] << std::endl;
 
     const std::string inOctoMap = argv[1];
+    const std::string outDir    = argv[2];
 
     // Read the octomap.
     pcu::OccupancyMap ocMap;
@@ -33,6 +34,11 @@ int main(int argc, char** argv) {
 
     std::cout << "octomap has " << ocMap.get_octree().getNumLeafNodes() << " leaf nodes." << std::endl;
     ocMap.find_frontiers();
+    {
+        // Test use.
+        std::string outFn = outDir + "/OccupancyMapVoxels.csv";
+        ocMap.write_voxels_as_list(outFn);
+    }
 
     return 0;
 }

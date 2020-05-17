@@ -8,9 +8,9 @@
 #include <cstdint>
 #include <iostream>
 #include <sstream>
+#include <string>
 
 #include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
 
 namespace pcu {
 enum {
@@ -21,7 +21,8 @@ enum {
 typedef enum {
     OCP_MAP_OCC_FREE = 0,
     OCP_MAP_OCC_OCCUPIED,
-    OCP_MAP_OCC_UNKNOWN
+    OCP_MAP_OCC_UNKNOWN,
+    OCP_MAP_OCC_FRONTIER
 } OCP_MAP_OCC_t;
 
 typedef float CReal;
@@ -56,7 +57,6 @@ public:
     ~CR_DenseGrid() = default;
 
     void resize(std::size_t nx, std::size_t ny, std::size_t nz);
-
     CMask* get_dense_grid();
 protected:
     thrust::host_vector<CMask> denseGrid;

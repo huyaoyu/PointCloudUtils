@@ -149,7 +149,7 @@ static void parse_args(int argc, char* argv[], Args& args) {
                 (Args::AS_EN_LIMIT.c_str(), bpo::value< int >(&args.enLimit)->default_value(Args::AI_EN_LIMIT), "The limit number of points for normal averaging.")
                 (Args::AS_FLAG_SEC_BORDER.c_str(), bpo::value< bool >( &args.flagSectionBorder )->implicit_value(true), "Set this to enable section border filter. Must set --sec-border-limit.")
                 (Args::AS_SEC_BORDER_LIMIT.c_str(), bpo::value< float >( &args.sectionBorderLimit )->default_value(Args::AI_SEC_BORDER_LIMIT), "The limit distance to classify a point to be near the border of the point cloud section. ")
-                (Args::AS_SEC_BORDER_CORNERS.c_str(), bpo::value< std::string >( &secBorderCornersString ), "The section border corner points, x0, y0, z0, x1, y1, z1.");
+                (Args::AS_SEC_BORDER_CORNERS.c_str(), bpo::value< std::string >( &secBorderCornersString )->default_value("0, 0, 0, 0, 0, 0"), "The section border corner points, x0, y0, z0, x1, y1, z1.");
 
         bpo::positional_options_description posOptDesc;
         posOptDesc.add(Args::AS_IN_CLOUD.c_str(), 1).add(Args::AS_OUT_DIR.c_str(), 1);

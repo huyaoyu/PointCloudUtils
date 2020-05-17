@@ -2,6 +2,9 @@
 // Created by yaoyu on 5/11/20.
 //
 
+#include <fstream>
+#include <sstream>
+
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 

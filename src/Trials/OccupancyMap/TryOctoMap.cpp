@@ -57,6 +57,7 @@ public:
         out << Args::AS_IN_LIDAR << ": " << args.inLiDAR << std::endl;
         out << Args::AS_IN_CAM_PROJ << ": " << args.inCamProj << std::endl;
         out << Args::AS_OUT_DIR << ": " << args.outDir << std::endl;
+        out << Args::AS_OUT_NAME << ": " << args.outName << std::endl;
         out << Args::AS_FLAG_CUDA << ": " << args.flagCUDA << std::endl;
 
         return out;
@@ -67,6 +68,7 @@ public:
     static const std::string AS_IN_LIDAR;
     static const std::string AS_IN_CAM_PROJ;
     static const std::string AS_OUT_DIR;
+    static const std::string AS_OUT_NAME;
     static const std::string AS_FLAG_CUDA;
 
 public:
@@ -74,13 +76,15 @@ public:
     std::string inLiDAR;
     std::string inCamProj;
     std::string outDir; // The output directory.
+    std::string outName; // The output file name.
     bool flagCUDA;
 };
 
-const std::string Args::AS_IN_MVS      = "inMVS";
-const std::string Args::AS_IN_LIDAR    = "inLiDAR";
-const std::string Args::AS_IN_CAM_PROJ = "inCamProj";
-const std::string Args::AS_OUT_DIR     = "outDir";
+const std::string Args::AS_IN_MVS      = "in-mvs";
+const std::string Args::AS_IN_LIDAR    = "in-lidar";
+const std::string Args::AS_IN_CAM_PROJ = "in-cam-proj";
+const std::string Args::AS_OUT_DIR     = "out-dir";
+const std::string Args::AS_OUT_NAME    = "out-name";
 const std::string Args::AS_FLAG_CUDA   = "cuda";
 
 static void parse_args(int argc, char* argv[], Args& args) {
@@ -95,6 +99,7 @@ static void parse_args(int argc, char* argv[], Args& args) {
                 (Args::AS_IN_LIDAR.c_str(), bpo::value< std::string >(&args.inLiDAR)->required(), "The input LiDAR point cloud.")
                 (Args::AS_IN_CAM_PROJ.c_str(), bpo::value< std::string >(&args.inCamProj)->required(), "The input JSON file that records the camera projection objects.")
                 (Args::AS_OUT_DIR.c_str(), bpo::value< std::string >(&args.outDir)->required(), "The output file.")
+                (Args::AS_OUT_NAME.c_str(), bpo::value< std::string >(&args.outName)->default_value("OcMap.ot"), "The output file name of the octomap object.")
                 (Args::AS_FLAG_CUDA.c_str(), bpo::value< int >()->implicit_value(1), "Set this flag for CUDA support.");
 
         bpo::positional_options_description posOptDesc;
@@ -394,7 +399,7 @@ int main(int argc, char** argv) {
 
     // Write the occupancy map.
     {
-        std::string outFn = args.outDir + "/OcMap.ot";
+        std::string outFn = args.outDir + "/" + args.outName;
         ocMap.write(outFn);
     }
 

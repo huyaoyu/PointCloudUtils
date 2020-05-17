@@ -47,13 +47,18 @@ public:
     void initialize(float res);
     octomap::OcTree& get_octree();
 
-    void set_basic_parameters( float res, float probH, float probM, float clampMin, float clampMax );
+    void set_basic_parameters( float res,
+            float ocpThres, float probH, float probM, float clampMin, float clampMax );
 
     template < typename pT, typename rT >
     void build_from_pcl_and_cam_proj(const typename pcl::PointCloud<pT>::Ptr pInCloud,
                                      const std::vector<CameraProjection<rT> > &camProjs);
 
     void find_frontiers();
+    template < typename rT >
+    void get_coordinates_by_index(std::size_t ix, std::size_t iy, std::size_t iz,
+                                  rT &x, rT &y, rT &z);
+    void write_voxels_as_list(const std::string &fn);
 
     template < typename pT >
     void insert_point_cloud( typename pcl::PointCloud<pT>::Ptr pInput,
@@ -83,20 +88,27 @@ protected:
             const octomap::point3d &point,
             std::size_t *index );
 
+    void get_dense_grid_index( const octomap::OcTreeKey &key,
+            std::size_t *index );
+
     void traverse_octree_and_fill_dense_grid( CMask *denseGrid );
 
 protected:
     std::shared_ptr<octomap::OcTree> pOcTree;
 
     float resolution;
+    float occupancyThreshold;
     float probHit;
     float probMiss;
     float clampingThresholdMin;
     float clampingThresholdMax;
 
+    octomap::OcTreeKey refKey;
     std::size_t vx;
     std::size_t vy;
     std::size_t vz;
+
+    CR_DenseGrid denseGrid;
 };
 
 template < typename pT, typename rT >

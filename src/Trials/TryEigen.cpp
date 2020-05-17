@@ -57,6 +57,12 @@ static void same_objects( const Eigen::VectorX<rT> &v0, Eigen::VectorX<rT> &v1 )
     v1 = R * v0 + t;
 }
 
+template < typename Derived >
+static void slice_dims( const Eigen::MatrixBase<Derived> &m ) {
+    std::cout << __FUNCTION__ << ": m.rows() = " << m.rows() << ", "
+              << "m.cols() = " << m.cols() << ". " << std::endl;
+}
+
 int main( int argc, char* argv[] ) {
     std::cout << "Hello, TryEigen! " << std::endl;
 
@@ -242,7 +248,7 @@ int main( int argc, char* argv[] ) {
     }
 
     {
-        // Temp test.
+        // eval() test.
         Eigen::Matrix3f K;
         K << 4877.75, 0, 2117.07007, 0, 4877.75, 1507.23999, 0, 0, 1;
         Eigen::Vector3f sp;
@@ -252,6 +258,12 @@ int main( int argc, char* argv[] ) {
         std::cout << "K = \n" << K << std::endl;
         std::cout << "sp = \n" << sp << std::endl;
         std::cout << "pixel = \n" << pixel << std::endl;
+    }
+
+    {
+        // Test slicing.
+        Eigen::MatrixXd M(10, 4);
+        slice_dims(M( Eigen::all, Eigen::seq(0, 1) ));
     }
 
     return 0;
