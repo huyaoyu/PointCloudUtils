@@ -16,4 +16,10 @@
     auto _stQuickTimeElapsed_##t = std::chrono::duration_cast<std::chrono::milliseconds>( _stQuickTimeEnd_##t - _stQuickTimeStart_##t ); \
     std::size_t t = _stQuickTimeElapsed_##t.count();
 
+#define QUICK_TIME_SHOW(t, msg) \
+    QUICK_TIME_END(t) \
+    {\
+        std::cout << msg << " in " << t << " ms. " << std::endl; \
+    }
+
 #endif //POINTCLOUDUTILS_SIMPLETIME_HPP

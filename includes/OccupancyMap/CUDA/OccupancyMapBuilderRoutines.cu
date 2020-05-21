@@ -194,12 +194,228 @@ CReal* CR_VisMask::get_pixels() {
 
 // ============================================================
 
-void CR_DenseGrid::resize(std::size_t nx, std::size_t ny, std::size_t nz) {
-    denseGrid.resize( nz * ny * nx );
+void CR_DenseGrid::resize(int vx, int vy, int vz) {
+    nx = vx;
+    ny = vy;
+    nz = vz;
+    denseGrid.resize(static_cast<std::size_t>(nz) * ny * nx );
     thrust::fill( denseGrid.begin(), denseGrid.end(), OCP_MAP_OCC_UNKNOWN );
     std::cout << "denseGrid.size() = " << denseGrid.size() << std::endl;
 }
 
 CMask* CR_DenseGrid::get_dense_grid() {
     return thrust::raw_pointer_cast( denseGrid.data() );
+}
+
+typedef struct  {
+    int x;
+    int y;
+    int z;
+} DenseGridDim_t;
+
+__global__
+void g_find_frontiers( CMask *cmask, DenseGridDim_t dgd ) {
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    int z = blockIdx.z * blockDim.z + threadIdx.z;
+    const int strideX = blockDim.x * gridDim.x;
+    const int strideY = blockDim.y * gridDim.y;
+    const int strideZ = blockDim.z * gridDim.z;
+
+    const int dimXY = dgd.x * dgd.y;
+
+    const int kDimXP  = blockDim.x + 2; // Kernel dimension x padded.
+    const int kDimYP  = blockDim.y + 2;
+//    const int kDimZP  = blockDim.z + 2;
+    const int kDimXYP = kDimXP * kDimYP;
+    const int kIdx = (threadIdx.z+1) * kDimXYP + (threadIdx.y+1) * kDimXP + (threadIdx.x+1);
+
+    extern __shared__ CMask shared_mask_array[];
+
+    const int blockXEnd = ( ( dgd.x + strideX - 1 ) / strideX ) * strideX;
+    const int blockYEnd = ( ( dgd.y + strideY - 1 ) / strideY ) * strideY;
+    const int blockZEnd = ( ( dgd.z + strideZ - 1 ) / strideZ ) * strideZ;
+
+    const int nNeighbors = 26;
+    int neighborShift[nNeighbors] = {
+            /* Group -1, 9 neighbors. */
+            -kDimXYP-kDimXP-1, -kDimXYP-kDimXP, -kDimXYP-kDimXP+1,
+            -kDimXYP       -1, -kDimXYP       , -kDimXYP       +1,
+            -kDimXYP+kDimXP-1, -kDimXYP+kDimXP, -kDimXYP+kDimXP+1,
+            /* Group 0, 8 neighbors. */
+            -kDimXP-1, -kDimXP, -kDimXP+1,
+                   -1,                 +1,
+            +kDimXP+1, +kDimXP, +kDimXP+1,
+            /* Group +1, 9 neighbors. */
+            +kDimXYP-kDimXP-1, +kDimXYP-kDimXP, +kDimXYP-kDimXP+1,
+            +kDimXYP       -1, +kDimXYP       , +kDimXYP       +1,
+            +kDimXYP+kDimXP-1, +kDimXYP+kDimXP, +kDimXYP+kDimXP+1
+    };
+    const int frontierLimit = 2;
+
+    for ( int iz = z; iz < blockZEnd; iz += strideZ ) {
+        for ( int iy = y; iy < blockYEnd; iy += strideY ) {
+            for ( int ix = x; ix < blockXEnd; ix += strideX ) {
+                if ( iz < dgd.z && iy < dgd.y && ix < dgd.x )
+                {
+                    int idx = iz * dimXY + iy * dgd.x + ix;
+
+                    // Load data to the shared memory.
+                    shared_mask_array[kIdx] = cmask[idx];
+
+                    if ( threadIdx.x == 0 ) {
+                        int kIdxShift = kIdx - 1;
+                        if ( ix != 0 ) {
+                            shared_mask_array[kIdxShift] = cmask[idx-1];
+                        } else {
+                            shared_mask_array[kIdxShift] = OCP_MAP_OCC_PADDING;
+                        }
+                    } else if ( threadIdx.x == blockDim.x - 1 ) {
+                        int kIdxShift = kIdx + 1;
+                        if ( ix != dgd.x - 1 ) {
+                            shared_mask_array[kIdxShift] = cmask[idx+1];
+                        } else {
+                            shared_mask_array[kIdxShift] = OCP_MAP_OCC_PADDING;
+                        }
+                    } else if ( ix == dgd.x - 1 ) {
+                        shared_mask_array[kIdx + 1] = OCP_MAP_OCC_PADDING;
+                    }
+
+                    if ( threadIdx.y == 0 ) {
+                        int kIdxShift = kIdx - kDimXP;
+                        if ( iy != 0 ) {
+                            shared_mask_array[ kIdxShift ] = cmask[ idx - dgd.x ];
+                        } else {
+                            shared_mask_array[ kIdxShift ] = OCP_MAP_OCC_PADDING;
+                        }
+                    } else if ( threadIdx.y == blockDim.y - 1 ) {
+                        int kIdxShift = kIdx + kDimXP;
+                        if ( iy != dgd.y - 1 ) {
+                            shared_mask_array[ kIdxShift ] = cmask[ idx + dgd.x ];
+                        } else {
+                            shared_mask_array[ kIdxShift ] = OCP_MAP_OCC_PADDING;
+                        }
+                    } else if ( iy == dgd.y - 1 ) {
+                        shared_mask_array[ kIdx + kDimXP ] = OCP_MAP_OCC_PADDING;
+                    }
+
+                    if ( threadIdx.z == 0 ) {
+                        int kIdxShift = kIdx - kDimXYP;
+                        if ( iz != 0 ) {
+                            shared_mask_array[ kIdxShift ] = cmask[ idx - dimXY ];
+                        } else {
+                            shared_mask_array[ kIdxShift ] = OCP_MAP_OCC_PADDING;
+                        }
+                    } else if ( threadIdx.z == blockDim.z - 1 ) {
+                        int kIdxShift = kIdx + kDimXYP;
+                        if ( iz != dgd.z - 1 ) {
+                            shared_mask_array[ kIdxShift ] = cmask[ idx + dimXY ];
+                        } else {
+                            shared_mask_array[ kIdxShift ] = OCP_MAP_OCC_PADDING;
+                        }
+                    } else if ( iz == dgd.z - 1 ) {
+                        shared_mask_array[ kIdx + kDimXYP ] = OCP_MAP_OCC_PADDING;
+                    }
+
+                    __syncthreads();
+
+                    // Check frontier.
+                    if ( shared_mask_array[kIdx] == OCP_MAP_OCC_FREE ) {
+                        int count = 0;
+                        for ( int k = 0; k < nNeighbors; ++k ) {
+                            if ( shared_mask_array[ kIdx + neighborShift[k] ] == OCP_MAP_OCC_UNKNOWN ) {
+                                count++;
+                                if ( count == frontierLimit ) {
+                                    cmask[idx] = OCP_MAP_OCC_FRONTIER;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    __syncthreads();
+                } else {
+                    // Load data to the shared memory.
+                    shared_mask_array[kIdx] = OCP_MAP_OCC_PADDING;
+
+                    if ( threadIdx.x == 0 ) {
+                        int kIdxShift = kIdx - 1;
+                        shared_mask_array[kIdxShift] = OCP_MAP_OCC_PADDING;
+                    } else if ( threadIdx.x == blockDim.x - 1 ) {
+                        int kIdxShift = kIdx + 1;
+                        shared_mask_array[kIdxShift] = OCP_MAP_OCC_PADDING;
+                    } else if ( ix == dgd.x - 1 ) {
+                        shared_mask_array[kIdx + 1] = OCP_MAP_OCC_PADDING;
+                    }
+
+                    if ( threadIdx.y == 0 ) {
+                        int kIdxShift = kIdx - kDimXP;
+                        shared_mask_array[ kIdxShift ] = OCP_MAP_OCC_PADDING;
+                    } else if ( threadIdx.y == blockDim.y - 1 ) {
+                        int kIdxShift = kIdx + kDimXP;
+                        shared_mask_array[ kIdxShift ] = OCP_MAP_OCC_PADDING;
+                    } else if ( iy == dgd.y - 1 ) {
+                        shared_mask_array[ kIdx + kDimXP ] = OCP_MAP_OCC_PADDING;
+                    }
+
+                    if ( threadIdx.z == 0 ) {
+                        int kIdxShift = kIdx - kDimXYP;
+                        shared_mask_array[ kIdxShift ] = OCP_MAP_OCC_PADDING;
+                    } else if ( threadIdx.z == blockDim.z - 1 ) {
+                        int kIdxShift = kIdx + kDimXYP;
+                        shared_mask_array[ kIdxShift ] = OCP_MAP_OCC_PADDING;
+                    } else if ( iz == dgd.z - 1 ) {
+                        shared_mask_array[ kIdx + kDimXYP ] = OCP_MAP_OCC_PADDING;
+                    }
+
+                    __syncthreads();
+                    __syncthreads();
+                }
+            }
+        }
+    }
+}
+
+void CR_DenseGrid::find_frontiers() {
+    // Copy host memory to device.
+    thrust::device_vector<CMask> dvDenseGrid = denseGrid;
+
+    DenseGridDim_t dgd;
+    dgd.x = nx;
+    dgd.y = ny;
+    dgd.z = nz;
+
+    // CUDA context check.
+    auto err = cudaGetLastError();
+    if ( cudaSuccess != err )
+    {
+        std::stringstream ss;
+        ss << __FILE__ << ": "<< __LINE__ << ": cudaGetLastError() returns " << err;
+        throw std::runtime_error(ss.str());
+    }
+
+    // Launch size.
+    const int blockDimX = 8;
+    const int blockDimY = 8;
+    const int blockDimZ = 8;
+    dim3 workingBlockDim(blockDimX, blockDimY, blockDimZ);
+    dim3 workingGridDim(8, 8, 8);
+    const std::size_t sharedMemSize = ( blockDimZ+2 ) * (blockDimY+2) * (blockDimX+2) * sizeof(CMask);
+    g_find_frontiers<<<workingGridDim, workingBlockDim, sharedMemSize>>>(
+            thrust::raw_pointer_cast( dvDenseGrid.data() ), dgd );
+
+    // Wait for the GPU.
+    cudaDeviceSynchronize();
+
+    // CUDA context check.
+    err = cudaGetLastError();
+    if ( cudaSuccess != err )
+    {
+        std::stringstream ss;
+        ss << __FILE__ << ": "<< __LINE__ << ": cudaGetLastError() returns " << err;
+        throw std::runtime_error(ss.str());
+    }
+
+    // Copy back from the device.
+    denseGrid = dvDenseGrid;
 }

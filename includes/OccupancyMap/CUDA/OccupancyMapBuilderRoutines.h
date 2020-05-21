@@ -22,7 +22,8 @@ typedef enum {
     OCP_MAP_OCC_FREE = 0,
     OCP_MAP_OCC_OCCUPIED,
     OCP_MAP_OCC_UNKNOWN,
-    OCP_MAP_OCC_FRONTIER
+    OCP_MAP_OCC_FRONTIER,
+    OCP_MAP_OCC_PADDING
 } OCP_MAP_OCC_t;
 
 typedef float CReal;
@@ -56,10 +57,15 @@ public:
     CR_DenseGrid() = default;
     ~CR_DenseGrid() = default;
 
-    void resize(std::size_t nx, std::size_t ny, std::size_t nz);
     CMask* get_dense_grid();
+
+    void resize(int vx, int vy, int vz);
+    void find_frontiers();
 protected:
     thrust::host_vector<CMask> denseGrid;
+    int nx;
+    int ny;
+    int nz;
 };
 
 }

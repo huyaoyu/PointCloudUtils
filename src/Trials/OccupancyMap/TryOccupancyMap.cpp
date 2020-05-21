@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
     ocMap.find_frontiers();
     {
         // Test use.
-        std::string outFn = outDir + "/OccupancyMapVoxels.csv";
+        std::string outFn = outDir + "/OccupancyMapVoxelsWithFrontiers.csv";
         ocMap.write_voxels_as_list(outFn);
     }
 

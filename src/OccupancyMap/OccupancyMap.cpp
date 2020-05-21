@@ -6,6 +6,8 @@
 
 #include <thrust/device_vector.h>
 
+#include "Profiling/SimpleTime.hpp"
+
 #include "OccupancyMap/OccupancyMap.hpp"
 
 using namespace pcu;
@@ -117,8 +119,19 @@ void OccupancyMap::traverse_octree_and_fill_dense_grid(CMask *denseGrid ) {
     std::size_t countFree = 0, countOccupied = 0;
     octomap::OcTreeKey key;
     for ( octomap::OcTree::leaf_iterator it = pOcTree->begin_leafs(16),
-            end = pOcTree->end_leafs(); it != end; ++it ) {
+            end = pOcTree->end(); it != end; ++it ) {
+        std::size_t depth = it.getDepth();
+
+//        if ( depth != pOcTree->getTreeDepth() ) {
+//            continue;
+//        }
+
         key = it.getKey();
+
+//        // Test use.
+//        if ( key[0] == 31852 && key[1] == 32749 && key[2] == 32742 ) {
+//            std::cout << "Here it is. " << std::endl;
+//        }
 
         // Figure out the index into the denseGrid.
         get_dense_grid_index(key, index3);
@@ -130,11 +143,11 @@ void OccupancyMap::traverse_octree_and_fill_dense_grid(CMask *denseGrid ) {
 
         // Fill.
         if ( pOcTree->isNodeOccupied(*it) ) {
-            // Free.
+            // Occupied.
             denseGrid[index] = OCP_MAP_OCC_OCCUPIED;
             countOccupied++;
         } else {
-            // Occupied.
+            // Free.
             denseGrid[index] = OCP_MAP_OCC_FREE;
             countFree++;
         }
@@ -145,6 +158,11 @@ void OccupancyMap::traverse_octree_and_fill_dense_grid(CMask *denseGrid ) {
 }
 
 void OccupancyMap::find_frontiers() {
+    QUICK_TIME_START(te)
+
+    // Expand the OcTree object.
+    pOcTree->expand();
+
     // Get the metric dimensions of the OcTree object.
     double m0[3];
     double m1[3];
@@ -181,12 +199,35 @@ void OccupancyMap::find_frontiers() {
     std::cout << "vx, vy, vz = "
               << vx << ", " << vy << ", " << vz << ". " << std::endl;
 
+//    // Test use.
+//    octomap::point3d testPoint( -45.7752, -0.949873, -1.278810 );
+//    octomap:: OcTreeKey testKey;
+//    bool testCheck;
+//    testCheck = pOcTree->coordToKeyChecked(testPoint, testKey);
+//    std::cout << "testCheck = " << testCheck << std::endl;
+//    std::cout << "testKey = [ " << testKey[0] << ", "
+//              << testKey[1] << ", "
+//              << testKey[2] << " ] " << std::endl;
+//    std::cout << "pOcTree->getTreeDepth() = " << pOcTree->getTreeDepth() << std::endl;
+//
+//    octomap::OcTreeNode *pNode = pOcTree->search(testPoint, 16);
+//    if ( pNode ) {
+//        std::cout << "pNode->getOccupancy() = " << pNode->getOccupancy() << std::endl;
+//    } else {
+//        std::cout << "Cannot find node. " << std::endl;
+//    }
+
     // Allocate memory.
 //    CR_DenseGrid denseGrid;
     denseGrid.resize( vx, vy, vz );
 
     // Fill in free and occupied voxels.
     traverse_octree_and_fill_dense_grid( denseGrid.get_dense_grid() );
+
+    // Find all frontiers.
+    denseGrid.find_frontiers();
+
+    QUICK_TIME_SHOW(te, "Find frontier")
 }
 
 template < typename rT >
