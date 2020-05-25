@@ -72,7 +72,13 @@ public:
     void read(const std::string &fn);
     void write(const std::string &fn);
 
-protected:
+private:
+    OccupancyMap( const OccupancyMap &other ) {}
+    OccupancyMap( OccupancyMap &&other ) {}
+    OccupancyMap& operator = ( const OccupancyMap &other ) { return *this; }
+    OccupancyMap& operator = ( OccupancyMap &&other ) { return *this; }
+
+private:
     void refresh_basic_parameters();
 
     template < typename pT >
@@ -93,7 +99,7 @@ protected:
 
     void traverse_octree_and_fill_dense_grid( CMask *denseGrid );
 
-protected:
+private:
     std::shared_ptr<octomap::OcTree> pOcTree;
 
     float resolution;

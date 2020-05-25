@@ -1,0 +1,14 @@
+//
+// Created by yaoyu on 5/25/20.
+//
+
+#ifndef POINTCLOUDUTILS_INCLUDES_CPP_COPYASSIGNMENTMOVE_HPP
+#define POINTCLOUDUTILS_INCLUDES_CPP_COPYASSIGNMENTMOVE_HPP
+
+#define COPY_NAME(name, input) \
+    this->name = input.name;
+
+#define COPY_OTHER(name) \
+    COPY_NAME(name, other)
+
+#endif //POINTCLOUDUTILS_INCLUDES_CPP_COPYASSIGNMENTMOVE_HPP

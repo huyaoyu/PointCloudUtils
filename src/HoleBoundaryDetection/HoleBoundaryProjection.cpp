@@ -54,6 +54,7 @@ public:
 
     friend std::ostream& operator<<(std::ostream& out, const Args& args) {
         out << Args::AS_IN_CLOUD << ": " << args.inCloud << std::endl;
+        out << Args::AS_IN_OCP_MAP << ": " << args.inOcpMap << std::endl;
         out << Args::AS_IN_SETS_JSON << ": " << args.inJson << std::endl;
         out << Args::AS_IN_CAM_POSES << ": " << args.inCamPoses << std::endl;
         out << Args::AS_IN_CAM_P1 << ": " << args.inCamP1 << std::endl;
@@ -67,6 +68,7 @@ public:
 
 public:
     static const std::string AS_IN_CLOUD; // AS stands for argument string
+    static const std::string AS_IN_OCP_MAP; // The occupancy map.
     static const std::string AS_IN_SETS_JSON;
     static const std::string AS_IN_CAM_POSES;
     static const std::string AS_IN_CAM_P1;
@@ -77,6 +79,7 @@ public:
 
 public:
     std::string inCloud; // The input point cloud file.
+    std::string inOcpMap; // The occupancy map. With free and occupied voxels defined.
     std::string inJson;
     std::string inCamPoses; // The input camera poses.
     std::string inCamP1; // The camera intrinsics, 3x4 matrix. The 3x3 part is K.
@@ -86,10 +89,11 @@ public:
     float projCurvLimit; // The maximum curvature value for a point set to be considered as flat.
 };
 
-const std::string Args::AS_IN_CLOUD      = "incloud";
-const std::string Args::AS_IN_SETS_JSON  = "injson";
-const std::string Args::AS_IN_CAM_POSES  = "incamposes";
-const std::string Args::AS_IN_CAM_P1     = "incamp1";
+const std::string Args::AS_IN_CLOUD      = "in-cloud";
+const std::string Args::AS_IN_OCP_MAP    = "in-ocp-map";
+const std::string Args::AS_IN_SETS_JSON  = "in-json";
+const std::string Args::AS_IN_CAM_POSES  = "in-cam-poses";
+const std::string Args::AS_IN_CAM_P1     = "in-cam-p1";
 const std::string Args::AS_IN_IMG_SIZE   = "in-img-size";
 const std::string Args::AS_OUT_DIR       = "outdir";
 const std::string Args::AS_PROJ_NUM_LIM  = "proj-num-limit";
@@ -102,7 +106,8 @@ static void parse_args(int argc, char* argv[], Args& args) {
 
         optDesc.add_options()
                 ("help", "Produce help message.")
-                (Args::AS_IN_CLOUD.c_str(), bpo::value< std::string >(&(args.inCloud))->required(), "Input point cloud.")
+                (Args::AS_IN_CLOUD.c_str(), bpo::value< std::string >(&args.inCloud)->required(), "Input point cloud.")
+                (Args::AS_IN_OCP_MAP.c_str(), bpo::value< std::string >(&args.inOcpMap)->required(), "The occupancy map.")
                 (Args::AS_IN_SETS_JSON.c_str(), bpo::value< std::string >(&args.inJson)->required(), "The JSON file stores the disjoint sets.")
                 (Args::AS_IN_CAM_POSES.c_str(), bpo::value< std::string >(&args.inCamPoses)->required(), "The camera pose CSV file.")
                 (Args::AS_IN_CAM_P1.c_str(), bpo::value< std::string >(&args.inCamP1)->required(), "The P1 matrix.")
@@ -114,6 +119,7 @@ static void parse_args(int argc, char* argv[], Args& args) {
         bpo::positional_options_description posOptDesc;
         posOptDesc.add(
                 Args::AS_IN_CLOUD.c_str(), 1
+                ).add(Args::AS_IN_OCP_MAP.c_str(), 1
                 ).add(Args::AS_IN_SETS_JSON.c_str(), 1
                 ).add(Args::AS_IN_CAM_POSES.c_str(), 1
                 ).add(Args::AS_IN_CAM_P1.c_str(), 1

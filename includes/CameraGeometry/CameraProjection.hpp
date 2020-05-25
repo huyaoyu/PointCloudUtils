@@ -5,6 +5,7 @@
 #ifndef POINTCLOUDUTILS_INCLUDES_CAMERAGEOMETRY_CAMERAPROJECTION_HPP
 #define POINTCLOUDUTILS_INCLUDES_CAMERAGEOMETRY_CAMERAPROJECTION_HPP
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -15,8 +16,13 @@
 
 #include <Eigen/Dense>
 
+#include "DataInterfaces/JSON/single_include/nlohmann/json.hpp"
+#include "DataInterfaces/JSONHelper/Reader.hpp"
 #include "DataInterfaces/Plain/FromVector.hpp"
+#include "Exception/Common.hpp"
 #include "Profiling/Instrumentor.hpp"
+
+struct NoCamProjFound : virtual exception_common_base {};
 
 template < typename rT >
 class CameraProjection {
@@ -50,6 +56,10 @@ public:
         }
     }
 
+    CameraProjection( CameraProjection<rT>&& other ) noexcept {
+        this->swap(other);
+    }
+
     ~CameraProjection() = default;
 
     CameraProjection<rT>& operator = ( const CameraProjection<rT>& other ) {
@@ -75,6 +85,24 @@ public:
         }
 
         return *this;
+    }
+
+    CameraProjection<rT>& operator= ( CameraProjection<rT>&& other ) noexcept {
+        this->swap( other );
+        return *this;
+    }
+
+    void swap( CameraProjection<rT>& other ) noexcept {
+        std::swap( K,  other.K );
+        std::swap( RC, other.RC );
+        std::swap( R,  other.R );
+        std::swap( T,  other.T );
+        std::swap( Q,  other.Q );
+        std::swap( height, other.height );
+        std::swap( width,  other.width );
+        std::swap( id, other.id );
+        std::swap( RCtRt, other.RCtRt );
+        std::swap( frustumNormals, other.frustumNormals );
     }
 
     void set_R(const Eigen::Matrix3<rT> &r);
@@ -596,6 +624,85 @@ std::shared_ptr< CameraProjection<rT> > create_camera_projection(
     pCamProj->Q = Eigen::Quaternion<rT>( vQ[0], vQ[1], vQ[2], vQ[3] );
 
     return pCamProj;
+}
+
+template < typename rT >
+std::vector<CameraProjection<rT>> read_cam_proj_from_json( const std::string &fn ) {
+    using JSON = nlohmann::json;
+    std::vector<CameraProjection<rT>> camProjs;
+
+    std::shared_ptr<JSON> pJson = read_json( fn );
+
+    const auto& jCamProjs = (*pJson)["camProjs"];
+    const int N = jCamProjs.size();
+
+    if ( 0 == N ) {
+        BOOST_THROW_EXCEPTION( NoCamProjFound() << ExceptionInfoString("No camera projection objects found in the JSON file.") );
+    }
+
+    for ( int i = 0; i < N; ++i ) {
+        CameraProjection<rT> camProj;
+        const auto& jCamProj = jCamProjs[i];
+
+        camProj.id     = jCamProj["id"];
+        camProj.height = jCamProj["height"];
+        camProj.width  = jCamProj["width"];
+
+        convert_vector_2_eigen_mat3(   jCamProj["K"].get<  std::vector<rT> >(), camProj.K );
+        convert_vector_2_eigen_mat3(   jCamProj["RC"].get< std::vector<rT> >(), camProj.RC );
+        convert_vector_2_eigen_mat3(   jCamProj["R"].get<  std::vector<rT> >(), camProj.R );
+        convert_vector_2_eigen_vector( jCamProj["T"].get<  std::vector<rT> >(), camProj.T );
+
+        std::vector<rT> qv = jCamProj["Q"].get< std::vector<rT> >();
+
+        camProj.Q = Eigen::Quaternion<rT>( qv[0], qv[1], qv[2], qv[3] );
+
+        camProj.update_RCtRt();
+        camProj.update_frustum_normals();
+
+        camProjs.emplace_back( camProj );
+    }
+
+    return camProjs;
+}
+
+
+template < typename rT >
+void read_cam_proj_from_json( const std::string &fn,
+                              std::vector<CameraProjection<rT>> &camProjs) {
+    using JSON = nlohmann::json;
+
+    std::shared_ptr<JSON> pJson = read_json( fn );
+
+    const auto& jCamProjs = (*pJson)["camProjs"];
+    const int N = jCamProjs.size();
+
+    if ( 0 == N ) {
+        BOOST_THROW_EXCEPTION( NoCamProjFound() << ExceptionInfoString("No camera projection objects found in the JSON file.") );
+    }
+
+    for ( int i = 0; i < N; ++i ) {
+        CameraProjection<rT> camProj;
+        const auto& jCamProj = jCamProjs[i];
+
+        camProj.id     = jCamProj["id"];
+        camProj.height = jCamProj["height"];
+        camProj.width  = jCamProj["width"];
+
+        convert_vector_2_eigen_mat3(   jCamProj["K"].get<  std::vector<rT> >(), camProj.K );
+        convert_vector_2_eigen_mat3(   jCamProj["RC"].get< std::vector<rT> >(), camProj.RC );
+        convert_vector_2_eigen_mat3(   jCamProj["R"].get<  std::vector<rT> >(), camProj.R );
+        convert_vector_2_eigen_vector( jCamProj["T"].get<  std::vector<rT> >(), camProj.T );
+
+        std::vector<rT> qv = jCamProj["Q"].get< std::vector<rT> >();
+
+        camProj.Q = Eigen::Quaternion<rT>( qv[0], qv[1], qv[2], qv[3] );
+
+        camProj.update_RCtRt();
+        camProj.update_frustum_normals();
+
+        camProjs.emplace_back( camProj );
+    }
 }
 
 #endif //POINTCLOUDUTILS_INCLUDES_CAMERAGEOMETRY_CAMERAPROJECTION_HPP

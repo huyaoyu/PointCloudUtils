@@ -18,8 +18,6 @@
 
 #include "Args/Args.hpp"
 #include "CameraGeometry/CameraProjection.hpp"
-#include "DataInterfaces/JSON/single_include/nlohmann/json.hpp"
-#include "DataInterfaces/JSONHelper/Reader.hpp"
 #include "DataInterfaces/Plain/FromVector.hpp"
 #include "Exception/Common.hpp"
 #include "OccupancyMap/OccupancyMap.hpp"
@@ -30,9 +28,6 @@
 
 // Namespaces.
 namespace bpo = boost::program_options;
-using JSON = nlohmann::json;
-
-struct NoCamProjFound : virtual exception_common_base {};
 
 typedef std::uint8_t VT;
 
@@ -57,7 +52,7 @@ public:
         out << Args::AS_IN_LIDAR << ": " << args.inLiDAR << std::endl;
         out << Args::AS_IN_CAM_PROJ << ": " << args.inCamProj << std::endl;
         out << Args::AS_OUT_DIR << ": " << args.outDir << std::endl;
-        out << Args::AS_OUT_NAME << ": " << args.outName << std::endl;
+        out << Args::AS_OUT_OT_NAME << ": " << args.outOTName << std::endl;
         out << Args::AS_FLAG_CUDA << ": " << args.flagCUDA << std::endl;
 
         return out;
@@ -68,7 +63,7 @@ public:
     static const std::string AS_IN_LIDAR;
     static const std::string AS_IN_CAM_PROJ;
     static const std::string AS_OUT_DIR;
-    static const std::string AS_OUT_NAME;
+    static const std::string AS_OUT_OT_NAME;
     static const std::string AS_FLAG_CUDA;
 
 public:
@@ -76,7 +71,7 @@ public:
     std::string inLiDAR;
     std::string inCamProj;
     std::string outDir; // The output directory.
-    std::string outName; // The output file name.
+    std::string outOTName; // The output file name.
     bool flagCUDA;
 };
 
@@ -84,7 +79,7 @@ const std::string Args::AS_IN_MVS      = "in-mvs";
 const std::string Args::AS_IN_LIDAR    = "in-lidar";
 const std::string Args::AS_IN_CAM_PROJ = "in-cam-proj";
 const std::string Args::AS_OUT_DIR     = "out-dir";
-const std::string Args::AS_OUT_NAME    = "out-name";
+const std::string Args::AS_OUT_OT_NAME    = "out-name";
 const std::string Args::AS_FLAG_CUDA   = "cuda";
 
 static void parse_args(int argc, char* argv[], Args& args) {
@@ -99,7 +94,7 @@ static void parse_args(int argc, char* argv[], Args& args) {
                 (Args::AS_IN_LIDAR.c_str(), bpo::value< std::string >(&args.inLiDAR)->required(), "The input LiDAR point cloud.")
                 (Args::AS_IN_CAM_PROJ.c_str(), bpo::value< std::string >(&args.inCamProj)->required(), "The input JSON file that records the camera projection objects.")
                 (Args::AS_OUT_DIR.c_str(), bpo::value< std::string >(&args.outDir)->required(), "The output file.")
-                (Args::AS_OUT_NAME.c_str(), bpo::value< std::string >(&args.outName)->default_value("OcMap.ot"), "The output file name of the octomap object.")
+                (Args::AS_OUT_OT_NAME.c_str(), bpo::value< std::string >(&args.outOTName)->default_value("OcMap.ot"), "The output file name of the octomap object.")
                 (Args::AS_FLAG_CUDA.c_str(), bpo::value< int >()->implicit_value(1), "Set this flag for CUDA support.");
 
         bpo::positional_options_description posOptDesc;
@@ -127,43 +122,6 @@ static void parse_args(int argc, char* argv[], Args& args) {
 
     if ( !args.validate() ) {
         EXCEPTION_INVALID_ARGUMENTS(args)
-    }
-}
-
-template < typename rT >
-static void read_cam_proj_from_json( const std::string &fn,
-        std::vector<CameraProjection<rT>> &camProjs ) {
-
-    std::shared_ptr<JSON> pJson = read_json( fn );
-
-    const auto& jCamProjs = (*pJson)["camProjs"];
-    const int N = jCamProjs.size();
-
-    if ( 0 == N ) {
-        BOOST_THROW_EXCEPTION( NoCamProjFound() << ExceptionInfoString("No camera projection objects found in the JSON file.") );
-    }
-
-    for ( int i = 0; i < N; ++i ) {
-        CameraProjection<rT> camProj;
-        const auto& jCamProj = jCamProjs[i];
-
-        camProj.id     = jCamProj["id"];
-        camProj.height = jCamProj["height"];
-        camProj.width  = jCamProj["width"];
-
-        convert_vector_2_eigen_mat3(   jCamProj["K"].get<  std::vector<rT> >(), camProj.K );
-        convert_vector_2_eigen_mat3(   jCamProj["RC"].get< std::vector<rT> >(), camProj.RC );
-        convert_vector_2_eigen_mat3(   jCamProj["R"].get<  std::vector<rT> >(), camProj.R );
-        convert_vector_2_eigen_vector( jCamProj["T"].get<  std::vector<rT> >(), camProj.T );
-
-        std::vector<rT> qv = jCamProj["Q"].get< std::vector<rT> >();
-
-        camProj.Q = Eigen::Quaternion<rT>( qv[0], qv[1], qv[2], qv[3] );
-
-        camProj.update_RCtRt();
-        camProj.update_frustum_normals();
-
-        camProjs.emplace_back( camProj );
     }
 }
 
@@ -361,8 +319,11 @@ int main(int argc, char** argv) {
     MAIN_COMMON_LINES(argc, argv, args)
 
     // Read the camera projection objects.
+//    std::vector<CameraProjection<float>> camProjs =
+//            read_cam_proj_from_json<float>(args.inCamProj);
+
     std::vector<CameraProjection<float>> camProjs;
-    read_cam_proj_from_json(args.inCamProj, camProjs);
+    read_cam_proj_from_json<float>(args.inCamProj, camProjs);
 
     // Test use.
     std::cout << camProjs.size() << " camera projection objects read from JSON file. " << std::endl;
@@ -399,7 +360,7 @@ int main(int argc, char** argv) {
 
     // Write the occupancy map.
     {
-        std::string outFn = args.outDir + "/" + args.outName;
+        std::string outFn = args.outDir + "/" + args.outOTName;
         ocMap.write(outFn);
     }
 

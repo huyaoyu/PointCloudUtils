@@ -209,6 +209,11 @@ add_executable(${EXE_TRIAL_TRY_OPENCV}
         src/Trials/TryOpenCV.cpp)
 target_link_libraries(${EXE_TRIAL_TRY_OPENCV} ${OpenCV_LIBRARIES})
 
+set(EXE_TRIAL_TRY_MOVE_SEMANTICS Trial_TryMoveSemantics)
+add_executable(${EXE_TRIAL_TRY_MOVE_SEMANTICS}
+        src/Trials/TryMoveSemantics.cpp)
+#target_link_libraries(${EXE_TRIAL_TRY_MOVE_SEMANTICS})
+
 # ========== Applications. ==========
 
 set(EXE_HOLE_BOUNDARY_DETECTION HoleBoundaryDetection)
@@ -221,6 +226,16 @@ add_executable(${EXE_HOLE_BOUNDARY_DETECTION}
         src/HoleBoundaryDetection/HoleBoundaryDetector.cpp includes/HoleBoundaryDetection/HoleBoundaryDetector.hpp
         src/HoleBoundaryDetection/HoleBoundaryDetection.cpp)
 target_link_libraries(${EXE_HOLE_BOUNDARY_DETECTION} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
+
+set(EXE_BUILD_OCP_MAP BuildOccupancyMap)
+add_executable(${EXE_BUILD_OCP_MAP}
+        src/HoleBoundaryDetection/BuildOccupancyMap.cpp)
+set_target_properties(${EXE_BUILD_OCP_MAP} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+target_link_libraries(${EXE_BUILD_OCP_MAP}
+        ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
+        Eigen3::Eigen
+        ${LIB_OCCUPANCY_MAP} ${PCL_LIBRARIES}
+        ${LIB_CUDA_OCP_BUILDER} ${LIB_OCCUPANCY_MAP})
 
 set(EXE_HOLE_BOUNDARY_PROJECTION HoleBoundaryProjection)
 add_executable(${EXE_HOLE_BOUNDARY_PROJECTION}

@@ -251,7 +251,7 @@ void OccupancyMapBuilder<rT>::build_occupancy_map(
                 bfDepthMap, bfMaskIdxMap, bfSize, *pPC2D );
 
         if ( bfSize == 0 ) {
-            std::cout << "No points visible. " << std::endl;
+            std::cout << "No points visible. \n";
             continue;
         }
 
@@ -274,7 +274,7 @@ void OccupancyMapBuilder<rT>::build_occupancy_map(
         QUICK_TIME_START(teInsertPC)
         ocTree.insertPointCloud( ocPC, origin );
         QUICK_TIME_END(teInsertPC)
-        std::cout << "Insert to octomap " << teInsertPC << " ms. " << std::endl;
+        std::cout << "Insert to octomap " << teInsertPC << " ms. \n";
     }
 
     // Clean up.
@@ -282,7 +282,7 @@ void OccupancyMapBuilder<rT>::build_occupancy_map(
     delete [] bfDepthMap;
 
     QUICK_TIME_END(teBuild)
-    std::cout << "Build the occupancy map in " << teBuild << " ms. " << std::endl;
+    std::cout << "Build the occupancy map in " << teBuild << " ms. \n";
 }
 
 } // namespace pcu
