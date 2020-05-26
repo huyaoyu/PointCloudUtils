@@ -2,12 +2,10 @@
 // Created by yaoyu on 3/30/20.
 //
 
-#include <fstream>
 #include <iostream>
 #include <memory>
 #include <string>
 
-#include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 
 #include <pcl/common/projection_matrix.h>
@@ -35,11 +33,11 @@ struct NoCameraFound : virtual exception_common_base {};
 class Args
 {
 public:
-    Args(): projNumLimit(3) {}
+    Args(): projNumLimit(3), projCurvLimit(0.01) {}
 
     ~Args() = default;
 
-    bool validate() {
+    bool validate() const {
         bool flag = true;
 
         if (projNumLimit < 3 ) {
@@ -275,7 +273,7 @@ static void filter_cameras_with_pc_bbox(
 
     // Test use.
     std::cout << "points = \n" << points << "\n";
-    if ( outDir != "" ) {
+    if ( !outDir.empty() ) {
         std::string outFn = outDir + "/BBoxPointsForFilteringCameras.csv";
         write_matrix(outFn, points.transpose());
         std::cout << "Saved " << outFn << ". \n";
@@ -291,7 +289,7 @@ static void filter_cameras_with_pc_bbox(
     QUICK_TIME_END(teLoop)
     std::cout << "Loop in " << teLoop << " ms. \n";
 
-    if ( 0 == outCamProjs.size() ) {
+    if ( outCamProjs.empty() ) {
         BOOST_THROW_EXCEPTION( NoCameraFound()
             << ExceptionInfoString("No camera found from filtering by the bbox of the input point cloud.") );
     }
@@ -311,7 +309,7 @@ struct BoundaryPointSets {
         this->candidateSets = other.candidateSets;
     }
 
-    BoundaryPointSets( BoundaryPointSets &&other ) {
+    BoundaryPointSets( BoundaryPointSets &&other ) noexcept {
         this->pEquivalentNormals.reset( other.pEquivalentNormals.get() );
         other.pEquivalentNormals.reset( new pcl::PointCloud<pcl::PointNormal> );
 
@@ -329,7 +327,7 @@ struct BoundaryPointSets {
         return *this;
     }
 
-    BoundaryPointSets& operator = ( BoundaryPointSets &&other ) {
+    BoundaryPointSets& operator = ( BoundaryPointSets &&other ) noexcept {
         if ( this == &other ) {
             return *this;
         }
@@ -369,7 +367,7 @@ static bool check_possible_occlusion(
         if ( ocpMap.check_near_frontier( point.x, point.y, point.z, 2 ) ) {
             count++;
 
-            if ( static_cast<float>(count) / nIndices >= threshold ) {
+            if ( static_cast<float>(count) / static_cast<float>(nIndices) >= threshold ) {
                 flagOcclusion = true;
                 break;
             }
