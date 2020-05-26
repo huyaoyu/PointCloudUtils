@@ -85,7 +85,10 @@ set_target_properties(${LIB_CUDA_OCP_BUILDER} PROPERTIES CUDA_SEPARABLE_COMPILAT
 
 set(LIB_OCCUPANCY_MAP occupancy_map)
 add_library(${LIB_OCCUPANCY_MAP} STATIC
-        includes/OccupancyMap/OccupancyMap.hpp src/OccupancyMap/OccupancyMap.cpp )
+        includes/OccupancyMap/FrontierMap.hpp
+        includes/OccupancyMap/OccupancyMap.hpp
+        src/OccupancyMap/FrontierMap.cpp
+        src/OccupancyMap/OccupancyMap.cpp )
 set_target_properties(${LIB_OCCUPANCY_MAP} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 target_include_directories(${LIB_OCCUPANCY_MAP} PUBLIC ${OCTOMAP_INCLUDE_DIRS})
 target_link_directories(${LIB_OCCUPANCY_MAP} PUBLIC ${OCTOMAP_LIBRARY_DIRS})
@@ -248,7 +251,7 @@ target_link_libraries(${EXE_HOLE_BOUNDARY_PROJECTION}
         ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
         Eigen3::Eigen
         ${PCL_LIBRARIES}
-        ${OCTOMAP_LIBRARIES})
+        ${LIB_OCCUPANCY_MAP})
 
 set(EXE_HOLE_BOUNDARY_SAVE_POLYGON_COOR HoleBoundarySavePolygonCoor)
 add_executable(${EXE_HOLE_BOUNDARY_SAVE_POLYGON_COOR}

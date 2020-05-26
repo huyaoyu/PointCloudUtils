@@ -19,7 +19,7 @@
 #define QUICK_TIME_SHOW(t, msg) \
     QUICK_TIME_END(t) \
     {\
-        std::cout << msg << " in " << t << " ms. " << std::endl; \
+        std::cout << msg << " in " << t << " ms. \n"; \
     }
 
 #endif //POINTCLOUDUTILS_SIMPLETIME_HPP

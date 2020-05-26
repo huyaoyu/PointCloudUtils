@@ -12,11 +12,23 @@
 
 using namespace pcu;
 
+const std::vector<std::vector<int>> OccupancyMap::neighborShift = {
+        { -1, -1, -1 }, {  0, -1, -1 }, { +1, -1, -1 },
+        { -1,  0, -1 }, {  0,  0, -1 }, { +1,  0, -1 },
+        { -1, +1, -1 }, {  0, +1, -1 }, { +1, +1, -1 },
+        { -1, -1,  0 }, {  0, -1,  0 }, { +1, -1,  0 },
+        { -1,  0,  0 }, {  0,  0,  0 }, { +1,  0,  0 },
+        { -1, +1,  0 }, {  0, +1,  0 }, { +1, +1,  0 },
+        { -1, -1, +1 }, {  0, -1, +1 }, { +1, -1, +1 },
+        { -1,  0, +1 }, {  0,  0, +1 }, { +1,  0, +1 },
+        { -1, +1, +1 }, {  0, +1, +1 }, { +1, +1, +1 }
+};
+
 OccupancyMap::OccupancyMap()
 : resolution(0.05), occupancyThreshold(0.5),
   probHit(0.7), probMiss(0.3),
   clampingThresholdMin(0.1), clampingThresholdMax(0.95),
-  vx(0), vy(0), vz(0)
+  vx(0), vy(0), vz(0), nFrontiers(0)
 {
 
 }
@@ -28,17 +40,17 @@ void OccupancyMap::initialize( float res ) {
     assert(res > 0);
     resolution = res;
 
-    pOcTree.reset( new octomap::OcTree(resolution) );
+    pFrontierOcTree.reset( new Tree_t(resolution) );
     refresh_basic_parameters();
 }
 
-octomap::OcTree& OccupancyMap::get_octree() {
-    return *pOcTree;
+OccupancyMap::Tree_t& OccupancyMap::get_octree() {
+    return *pFrontierOcTree;
 }
 
 void OccupancyMap::set_basic_parameters( float res,
         float ocpThres, float probH, float probM, float clampMin, float clampMax ) {
-    if ( pOcTree.get() ) {
+    if ( pFrontierOcTree.get() ) {
         BOOST_THROW_EXCEPTION( CoordinateCheckFailed() << ExceptionInfoString("Already initialized") );
     }
 
@@ -58,29 +70,33 @@ void OccupancyMap::set_basic_parameters( float res,
 }
 
 void OccupancyMap::refresh_basic_parameters() {
-    if ( pOcTree.get() != nullptr ) {
-        pOcTree->setOccupancyThres(occupancyThreshold);
-        pOcTree->setProbHit(probHit);
-        pOcTree->setProbMiss(probMiss);
-        pOcTree->setClampingThresMin(clampingThresholdMin);
-        pOcTree->setClampingThresMax(clampingThresholdMax);
+    if ( pFrontierOcTree.get() != nullptr ) {
+        pFrontierOcTree->setOccupancyThres(occupancyThreshold);
+        pFrontierOcTree->setProbHit(probHit);
+        pFrontierOcTree->setProbMiss(probMiss);
+        pFrontierOcTree->setClampingThresMin(clampingThresholdMin);
+        pFrontierOcTree->setClampingThresMax(clampingThresholdMax);
     }
 }
 
 void OccupancyMap::read(const std::string &fn) {
-    pOcTree.reset(dynamic_cast<octomap::OcTree*>(
+//    pOcTree.reset(dynamic_cast<octomap::OcTree*>(
+//            octomap::AbstractOcTree::read(fn) ) );
+    pFrontierOcTree.reset(dynamic_cast<Tree_t*>(
             octomap::AbstractOcTree::read(fn) ) );
 
-    resolution           = pOcTree->getResolution();
-    occupancyThreshold   = pOcTree->getOccupancyThres();
-    probHit              = pOcTree->getProbHit();
-    probMiss             = pOcTree->getProbMiss();
-    clampingThresholdMin = pOcTree->getClampingThresMin();
-    clampingThresholdMax = pOcTree->getClampingThresMax();
+    resolution           = pFrontierOcTree->getResolution();
+    occupancyThreshold   = pFrontierOcTree->getOccupancyThres();
+    probHit              = pFrontierOcTree->getProbHit();
+    probMiss             = pFrontierOcTree->getProbMiss();
+    clampingThresholdMin = pFrontierOcTree->getClampingThresMin();
+    clampingThresholdMax = pFrontierOcTree->getClampingThresMax();
+
+    count_frontiers(); // Assign value to nFrontiers.
 }
 
-void OccupancyMap::write(const std::string &fn) {
-    pOcTree->write(fn);
+void OccupancyMap::write(const std::string &fn) const {
+    pFrontierOcTree->write(fn);
 }
 
 //static void get_octomap_size_parameters(
@@ -93,7 +109,7 @@ void OccupancyMap::write(const std::string &fn) {
 
 void OccupancyMap::get_dense_grid_index( const double* minPoint,
                            const octomap::point3d &point,
-                           std::size_t *index ) {
+                           std::size_t *index ) const {
     const double dx = point.x() - minPoint[0];
     const double dy = point.y() - minPoint[1];
     const double dz = point.z() - minPoint[2];
@@ -108,7 +124,7 @@ void OccupancyMap::get_dense_grid_index( const double* minPoint,
 }
 
 void OccupancyMap::get_dense_grid_index( const octomap::OcTreeKey &key,
-                           std::size_t *index ) {
+                           std::size_t *index ) const {
     index[0] = key[0] - refKey[0];
     index[1] = key[1] - refKey[1];
     index[2] = key[2] - refKey[2];
@@ -118,20 +134,9 @@ void OccupancyMap::traverse_octree_and_fill_dense_grid(CMask *denseGrid ) {
     std::size_t index3[3];
     std::size_t countFree = 0, countOccupied = 0;
     octomap::OcTreeKey key;
-    for ( octomap::OcTree::leaf_iterator it = pOcTree->begin_leafs(16),
-            end = pOcTree->end(); it != end; ++it ) {
-        std::size_t depth = it.getDepth();
-
-//        if ( depth != pOcTree->getTreeDepth() ) {
-//            continue;
-//        }
-
+    for ( Tree_t::leaf_iterator it = pFrontierOcTree->begin_leafs(16),
+            end = pFrontierOcTree->end(); it != end; ++it ) {
         key = it.getKey();
-
-//        // Test use.
-//        if ( key[0] == 31852 && key[1] == 32749 && key[2] == 32742 ) {
-//            std::cout << "Here it is. " << std::endl;
-//        }
 
         // Figure out the index into the denseGrid.
         get_dense_grid_index(key, index3);
@@ -142,7 +147,7 @@ void OccupancyMap::traverse_octree_and_fill_dense_grid(CMask *denseGrid ) {
         assert( index3[2] < vz );
 
         // Fill.
-        if ( pOcTree->isNodeOccupied(*it) ) {
+        if ( pFrontierOcTree->isNodeOccupied(*it) ) {
             // Occupied.
             denseGrid[index] = OCP_MAP_OCC_OCCUPIED;
             countOccupied++;
@@ -157,21 +162,59 @@ void OccupancyMap::traverse_octree_and_fill_dense_grid(CMask *denseGrid ) {
               << "countOccupied = " << countOccupied << ". " << std::endl;
 }
 
+void OccupancyMap::traverse_octree_and_update_frontiers( CMask *denseGrid ) {
+    std::size_t index3[3]; // The 3D index for denseGrid.
+    octomap::OcTreeKey key;
+    nFrontiers = 0; // Member variable.
+    for ( Tree_t::leaf_iterator it = pFrontierOcTree->begin_leafs(16),
+                  end = pFrontierOcTree->end(); it != end; ++it ) {
+        key = it.getKey();
+
+        // Figure out the 1D index in the denseGrid.
+        get_dense_grid_index(key, index3);
+        std::size_t index = index3[2]*vx*vy + index3[1]*vx +index3[0];
+
+        assert( index3[0] < vx );
+        assert( index3[1] < vy );
+        assert( index3[2] < vz );
+
+        // Update frontier.
+        if ( denseGrid[index] == OCP_MAP_OCC_FRONTIER ) {
+            it->set_frontier();
+            nFrontiers++;
+        } else {
+            it->clear_frontier();
+        }
+    }
+
+    std::cout << "Frontiers: " << nFrontiers << "\n";
+}
+
+void OccupancyMap::count_frontiers() {
+    nFrontiers = 0; // Member variable.
+    for ( Tree_t::leaf_iterator it = pFrontierOcTree->begin_leafs(16),
+                  end = pFrontierOcTree->end(); it != end; ++it ) {
+        if ( it->is_frontier() ) {
+            nFrontiers++;
+        }
+    }
+}
+
 void OccupancyMap::find_frontiers() {
     QUICK_TIME_START(te)
 
     // Expand the OcTree object.
-    pOcTree->expand();
+    pFrontierOcTree->expand();
 
     // Get the metric dimensions of the OcTree object.
     double m0[3];
     double m1[3];
-    pOcTree->getMetricMin( m0[0], m0[1], m0[2] );
-    pOcTree->getMetricMax( m1[0], m1[1], m1[2] );
+    pFrontierOcTree->getMetricMin( m0[0], m0[1], m0[2] );
+    pFrontierOcTree->getMetricMax( m1[0], m1[1], m1[2] );
 
     // Test use.
     octomap::OcTreeKey minKey, maxKey;
-    if ( !pOcTree->coordToKeyChecked( octomap::point3d( m0[0], m0[1], m0[2] ), minKey ) ) {
+    if ( !pFrontierOcTree->coordToKeyChecked( octomap::point3d( m0[0], m0[1], m0[2] ), minKey ) ) {
         std::cout << "m0 is not in the OcTree object." << std::endl;
     } else {
         std::cout << "minKey = [ "
@@ -180,7 +223,7 @@ void OccupancyMap::find_frontiers() {
                   << minKey[2] << " ]" << std::endl;
     }
 
-    if ( !pOcTree->coordToKeyChecked( octomap::point3d( m1[0], m1[1], m1[2] ), maxKey ) ) {
+    if ( !pFrontierOcTree->coordToKeyChecked( octomap::point3d( m1[0], m1[1], m1[2] ), maxKey ) ) {
         std::cout << "m1 is not in the OcTree object." << std::endl;
     } else {
         std::cout << "maxKey = [ "
@@ -227,26 +270,29 @@ void OccupancyMap::find_frontiers() {
     // Find all frontiers.
     denseGrid.find_frontiers();
 
+    // Update the occupancy map for frontiers.
+    traverse_octree_and_update_frontiers( denseGrid.get_dense_grid() );
+
     QUICK_TIME_SHOW(te, "Find frontier")
 }
 
 template < typename rT >
 void OccupancyMap::get_coordinates_by_index(
         std::size_t ix, std::size_t iy, std::size_t iz,
-        rT &x, rT &y, rT &z) {
+        rT &x, rT &y, rT &z) const {
     octomap::OcTreeKey key;
     key[0] = refKey[0] + ix;
     key[1] = refKey[1] + iy;
     key[2] = refKey[2] + iz;
 
-    octomap::point3d c = pOcTree->keyToCoord(key, 16);
+    octomap::point3d c = pFrontierOcTree->keyToCoord(key, 16);
 
     x = c.x();
     y = c.y();
     z = c.z();
 }
 
-void OccupancyMap::write_voxels_as_list(const std::string &fn) {
+void OccupancyMap::write_voxels_as_list(const std::string &fn) const {
     const CMask *pDenseGrid = denseGrid.get_dense_grid();
     if ( nullptr == pDenseGrid ) {
         std::stringstream ss;

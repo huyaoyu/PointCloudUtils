@@ -207,6 +207,10 @@ CMask* CR_DenseGrid::get_dense_grid() {
     return thrust::raw_pointer_cast( denseGrid.data() );
 }
 
+const CMask* CR_DenseGrid::get_dense_grid() const {
+    return thrust::raw_pointer_cast( denseGrid.data() );
+}
+
 typedef struct  {
     int x;
     int y;

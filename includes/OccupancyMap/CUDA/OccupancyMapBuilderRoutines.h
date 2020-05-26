@@ -58,6 +58,7 @@ public:
     ~CR_DenseGrid() = default;
 
     CMask* get_dense_grid();
+    const CMask* get_dense_grid() const;
 
     void resize(int vx, int vy, int vz);
     void find_frontiers();

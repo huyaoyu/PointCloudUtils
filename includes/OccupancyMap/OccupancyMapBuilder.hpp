@@ -36,10 +36,10 @@ public:
     void set_occlusion_threshold(rT t);
     void set_knn_k_and_knn_occ(int k, int occ);
 
-    template < typename pT >
+    template < typename pT, typename nT >
     void build_occupancy_map(const typename pcl::PointCloud<pT>::Ptr pInCloud,
                              const std::vector< CameraProjection<rT> > &camProjs,
-                             octomap::OcTree &ocTree );
+                             octomap::OccupancyOcTreeBase<nT> *ocTree );
 
 protected:
     template < typename pT >
@@ -215,11 +215,11 @@ void OccupancyMapBuilder<rT>::convert_pcl_2_octomap_by_vis_mask(
 }
 
 template < typename rT >
-template < typename pT >
+template < typename pT, typename nT >
 void OccupancyMapBuilder<rT>::build_occupancy_map(
         const typename pcl::PointCloud<pT>::Ptr pInCloud,
         const std::vector<CameraProjection<rT> > &camProjs,
-        octomap::OcTree &ocTree) {
+        octomap::OccupancyOcTreeBase<nT> *ocTree) {
     QUICK_TIME_START(teBuild)
     const int N = pInCloud->size();
 
@@ -272,7 +272,7 @@ void OccupancyMapBuilder<rT>::build_occupancy_map(
 
         // Insert the point cloud into the current octomap.
         QUICK_TIME_START(teInsertPC)
-        ocTree.insertPointCloud( ocPC, origin );
+        ocTree->insertPointCloud( ocPC, origin );
         QUICK_TIME_END(teInsertPC)
         std::cout << "Insert to octomap " << teInsertPC << " ms. \n";
     }

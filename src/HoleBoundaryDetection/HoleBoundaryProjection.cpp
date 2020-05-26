@@ -22,6 +22,7 @@
 #include "Filesystem/Filesystem.hpp"
 #include "HoleBoundaryDetection/HoleBoundaryDetector.hpp"
 #include "HoleBoundaryDetection/HoleBoundaryProjector.hpp"
+#include "OccupancyMap/OccupancyMap.hpp"
 #include "PCCommon/IO.hpp"
 #include "PCCommon/BBox.hpp"
 #include "Visualization/Print.hpp"
@@ -53,15 +54,15 @@ public:
     }
 
     friend std::ostream& operator<<(std::ostream& out, const Args& args) {
-        out << Args::AS_IN_CLOUD << ": " << args.inCloud << std::endl;
-        out << Args::AS_IN_OCP_MAP << ": " << args.inOcpMap << std::endl;
-        out << Args::AS_IN_SETS_JSON << ": " << args.inJson << std::endl;
-        out << Args::AS_IN_CAM_POSES << ": " << args.inCamPoses << std::endl;
-        out << Args::AS_IN_CAM_P1 << ": " << args.inCamP1 << std::endl;
-        out << Args::AS_IN_IMG_SIZE << ": " << args.inImgSize << std::endl;
-        out << Args::AS_OUT_DIR << ": " << args.outDir << std::endl;
-        out << Args::AS_PROJ_NUM_LIM << ": " << args.projNumLimit << std::endl;
-        out << Args::AS_PROJ_CURV_LIM << ": " << args.projCurvLimit << std::endl;
+        out << Args::AS_IN_CLOUD << ": " << args.inCloud << "\n";
+        out << Args::AS_IN_OCP_MAP << ": " << args.inOcpMap << "\n";
+        out << Args::AS_IN_SETS_JSON << ": " << args.inJson << "\n";
+        out << Args::AS_IN_CAM_POSES << ": " << args.inCamPoses << "\n";
+        out << Args::AS_IN_CAM_P1 << ": " << args.inCamP1 << "\n";
+        out << Args::AS_IN_IMG_SIZE << ": " << args.inImgSize << "\n";
+        out << Args::AS_OUT_DIR << ": " << args.outDir << "\n";
+        out << Args::AS_PROJ_NUM_LIM << ": " << args.projNumLimit << "\n";
+        out << Args::AS_PROJ_CURV_LIM << ": " << args.projCurvLimit << "\n";
 
         return out;
     }
@@ -156,21 +157,21 @@ static void write_cameras( const std::string &fn,
 
     const std::string TAB = "    ";
 
-    ofs << "{" << std::endl;
-    ofs << "\"camProjs\": [" << std::endl;
+    ofs << "{" << "\n";
+    ofs << "\"camProjs\": [" << "\n";
 
     for ( int i = 0; i < N; ++i ) {
         ofs << TAB;
         camProjs[i].write_json_content(ofs, TAB, 1);
 
         if ( i != N-1 ) {
-            ofs << "," << std::endl;
+            ofs << "," << "\n";
         } else {
-            ofs << " ]" << std::endl;
+            ofs << " ]" << "\n";
         }
     }
 
-    ofs << "}" << std::endl;
+    ofs << "}" << "\n";
 
     ofs.close();
 }
@@ -188,21 +189,21 @@ static void write_hole_polygon_points_json(
     const int N = hpp.size();
     const std::string TAB = "    ";
 
-    ofs << "{" << std::endl;
-    ofs << "\"hpp\": [" << std::endl;
+    ofs << "{" << "\n";
+    ofs << "\"hpp\": [" << "\n";
 
     for ( int i = 0; i < N; ++i ) {
         ofs << TAB;
         hpp[i].write_json_content(ofs, TAB, 1);
 
         if ( i != N-1 ) {
-            ofs << "," << std::endl;
+            ofs << "," << "\n";
         } else {
-            ofs << " ]" << std::endl;
+            ofs << " ]" << "\n";
         }
     }
 
-    ofs << "}" << std::endl;
+    ofs << "}" << "\n";
 
     ofs.close();
 }
@@ -249,7 +250,7 @@ static void filter_cameras_with_pc_bbox(
         const std::string &outDir="" ) {
     QUICK_TIME_START(te)
 
-    std::cout << inCamProjs.size() << " cameras to filter against bbox of the input point cloud. " << std::endl;
+    std::cout << inCamProjs.size() << " cameras to filter against bbox of the input point cloud. \n";
 
     outCamProjs.clear();
 
@@ -258,8 +259,8 @@ static void filter_cameras_with_pc_bbox(
     pcu::get_obb<pT, rT>(pPC, obb);
 
     // Test use.
-    std::cout << "obb: " << std::endl;
-    std::cout << obb << std::endl;
+    std::cout << "obb: \n";
+    std::cout << obb << "\n";
 
     // Find the 8 corners from the bbox.
     Eigen::MatrixX<rT> points;
@@ -273,11 +274,11 @@ static void filter_cameras_with_pc_bbox(
     points.colwise() += position;
 
     // Test use.
-    std::cout << "points = " << std::endl << points << std::endl;
+    std::cout << "points = \n" << points << "\n";
     if ( outDir != "" ) {
         std::string outFn = outDir + "/BBoxPointsForFilteringCameras.csv";
         write_matrix(outFn, points.transpose());
-        std::cout << "Saved " << outFn << ". " << std::endl;
+        std::cout << "Saved " << outFn << ". \n";
     }
 
     // Loop over all the cameras.
@@ -288,7 +289,7 @@ static void filter_cameras_with_pc_bbox(
         }
     }
     QUICK_TIME_END(teLoop)
-    std::cout << "Loop in " << teLoop << " ms. " << std::endl;
+    std::cout << "Loop in " << teLoop << " ms. \n";
 
     if ( 0 == outCamProjs.size() ) {
         BOOST_THROW_EXCEPTION( NoCameraFound()
@@ -297,11 +298,117 @@ static void filter_cameras_with_pc_bbox(
 
     QUICK_TIME_END(te)
     std::cout << "Filter cameras against point cloud's bbox in " << te << " ms. "
-              << outCamProjs.size() << " cameras remain. " << std::endl;
+              << outCamProjs.size() << " cameras remain. \n";
+}
+
+struct BoundaryPointSets {
+    BoundaryPointSets()
+        : pEquivalentNormals( new pcl::PointCloud<pcl::PointNormal> )
+    {}
+
+    BoundaryPointSets( const BoundaryPointSets &other ) {
+        *(this->pEquivalentNormals) = *(other.pEquivalentNormals);
+        this->candidateSets = other.candidateSets;
+    }
+
+    BoundaryPointSets( BoundaryPointSets &&other ) {
+        this->pEquivalentNormals.reset( other.pEquivalentNormals.get() );
+        other.pEquivalentNormals.reset( new pcl::PointCloud<pcl::PointNormal> );
+
+        this->candidateSets = std::move( other.candidateSets );
+    }
+
+    BoundaryPointSets& operator = ( const BoundaryPointSets &other ) {
+        if ( this == &other ) {
+            return *this;
+        }
+
+        *(this->pEquivalentNormals) = *(other.pEquivalentNormals);
+        this->candidateSets = other.candidateSets;
+
+        return *this;
+    }
+
+    BoundaryPointSets& operator = ( BoundaryPointSets &&other ) {
+        if ( this == &other ) {
+            return *this;
+        }
+
+        this->pEquivalentNormals.reset( other.pEquivalentNormals.get() );
+        other.pEquivalentNormals.reset( new pcl::PointCloud<pcl::PointNormal> );
+
+        this->candidateSets = std::move( other.candidateSets );
+
+        return *this;
+    }
+
+    ~BoundaryPointSets() = default;
+
+    bool check_size() const {
+        return pEquivalentNormals->size() == candidateSets.size();
+    }
+
+    pcl::PointCloud<pcl::PointNormal>::Ptr pEquivalentNormals;
+    std::vector< std::vector<int> > candidateSets;
+};
+
+static bool check_possible_occlusion(
+        const pcl::PointCloud<pcl::PointNormal>::Ptr pPC,
+        const std::vector<int> &indices,
+        const pcu::OccupancyMap &ocpMap,
+        float threshold=0.33 ) {
+    assert( threshold > 0 );
+
+    const int nIndices = indices.size();
+    int count = 0; // The number of occluded points.
+    bool flagOcclusion = false;
+
+    for ( const auto& idx : indices ) {
+        const auto& point = pPC->at(idx);
+
+        if ( ocpMap.check_near_frontier( point.x, point.y, point.z, 2 ) ) {
+            count++;
+
+            if ( static_cast<float>(count) / nIndices >= threshold ) {
+                flagOcclusion = true;
+                break;
+            }
+        }
+    }
+
+    return flagOcclusion;
+}
+
+static BoundaryPointSets filter_boundary_point_sets_by_occupancy_map(
+        const pcl::PointCloud<pcl::PointNormal>::Ptr pPC,
+        const BoundaryPointSets &boundaryPointSets,
+        const pcu::OccupancyMap &ocpMap ) {
+    QUICK_TIME_START(te)
+    assert( boundaryPointSets.check_size() );
+
+    BoundaryPointSets filteredBPS;
+
+    const int N = boundaryPointSets.candidateSets.size();
+
+    for ( int i = 0; i < N; ++i ) {
+        const std::vector<int> &indices = boundaryPointSets.candidateSets[i];
+        if ( !check_possible_occlusion(pPC, indices, ocpMap) ) {
+            filteredBPS.pEquivalentNormals->push_back(
+                    boundaryPointSets.pEquivalentNormals->at(i) );
+            filteredBPS.candidateSets.emplace_back( indices );
+        }
+    }
+
+    std::cout << filteredBPS.candidateSets.size() << " / " << N
+              << " boundary candidate point sets remain after filtering by the occupancy map. \n";
+
+    QUICK_TIME_SHOW(te, "Filter boundary point sets by the occupancy map")
+
+    return filteredBPS;
 }
 
 int main(int argc, char* argv[]) {
-    std::cout << "Hello, HoleBoundaryProjection! " << std::endl;
+    std::cout << "Hello, HoleBoundaryProjection! \n";
 
     // Handle the command line.
     MAIN_COMMON_LINES(argc, argv, args)
@@ -316,15 +423,29 @@ int main(int argc, char* argv[]) {
     // Read the image size JSON file.
     float imgHeight, imgWidth;
     read_image_size_json( args.inImgSize, imgHeight, imgWidth );
-    std::cout << "Image size is ( " << imgHeight << ", " << imgWidth << " ). " << std::endl;
+    std::cout << "Image size is ( " << imgHeight << ", " << imgWidth << " ). \n";
 
     // Read the JSON file.
-    pcl::PointCloud<pcl::PointNormal>::Ptr pEquivalentNormals ( new pcl::PointCloud<pcl::PointNormal> );
-    std::vector< std::vector<int> > candidateSets;
-    pcu::read_equivalent_normal_from_json(args.inJson, pEquivalentNormals, candidateSets);
+    BoundaryPointSets boundaryPointSets;
+    pcu::read_equivalent_normal_from_json( args.inJson,
+            boundaryPointSets.pEquivalentNormals,
+            boundaryPointSets.candidateSets );
 
-//    std::shared_ptr< std::vector< std::vector<int> > > pCandidateSets =
-//            std::make_shared< std::vector< std::vector<int> > >(candidateSets);
+    // Read the occupancy map.
+    pcu::OccupancyMap ocpMap;
+    ocpMap.read(args.inOcpMap);
+
+    std::cout << "Read the occupancy map. "
+              << ocpMap.num_frontiers() << " frontier voxels. \n";
+
+    // Filter the equivalent normals and boundary candidate points by the occupancy map.
+    std::cout << "Begin filter the boundary candidate point sets. \n";
+    BoundaryPointSets filteredBPS =
+            filter_boundary_point_sets_by_occupancy_map(
+                    pInCloud, boundaryPointSets, ocpMap );
+
+//    // Test use.
+//    throw std::runtime_error("Test");
 
     // Read the camera pose file.
     Eigen::VectorXi camID;
@@ -353,16 +474,10 @@ int main(int argc, char* argv[]) {
     }
 
 //    // Test use.
-//    std::cout << "camProj.size() = " << camProj.size() << std::endl;
-//    std::cout << "camProj[ camProj.siz()-1 ].T = " << std::endl << camProj[ camProj.size()-1 ].T << std::endl;
-//    std::cout << "camProj[ camProj.siz()-1 ].K = " << std::endl << camProj[ camProj.size()-1 ].K << std::endl;
-    std::cout << camProj[0] << std::endl;
-
-    // Build the occupancy map.
-
-
-
-
+//    std::cout << "camProj.size() = " << camProj.size() << "\n";
+//    std::cout << "camProj[ camProj.siz()-1 ].T = " << "\n" << camProj[ camProj.size()-1 ].T << "\n";
+//    std::cout << "camProj[ camProj.siz()-1 ].K = " << "\n" << camProj[ camProj.size()-1 ].K << "\n";
+    std::cout << camProj[0] << "\n";
 
     print_bar("Project the boundary candidates.");
     // Hole boundary projector.
@@ -372,7 +487,9 @@ int main(int argc, char* argv[]) {
 
     std::vector< pcu::HoleBoundaryPoints<float> > holePolygonPoints;
 
-    hbp.process( pInCloud, candidateSets, pEquivalentNormals, camProj, holePolygonPoints );
+    hbp.process( pInCloud,
+            filteredBPS.candidateSets, filteredBPS.pEquivalentNormals,
+            camProj, holePolygonPoints );
 
     {
         std::string outFn = args.outDir + "/HolePolygonPoints.json";
