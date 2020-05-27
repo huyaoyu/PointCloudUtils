@@ -16,6 +16,7 @@ struct exception_common_base    : virtual std::exception, virtual boost::excepti
 struct not_implemented          : virtual exception_common_base {};
 struct file_not_good            : virtual exception_common_base {};
 struct eigen_row_major          : virtual exception_common_base {};
+struct FileExists               : virtual exception_common_base {};
 
 typedef boost::error_info<struct tag_info_string, std::string> ExceptionInfoString;
 
@@ -33,6 +34,12 @@ typedef boost::error_info<struct tag_info_string, std::string> ExceptionInfoStri
         BOOST_THROW_EXCEPTION( file_not_good() << ExceptionInfoString(fn##_ss.str()) ); \
     }
 
+#define EXCEPTION_FILE_EXISTS(fn) \
+    {\
+        std::stringstream fn##_ss; \
+        fn##_ss << "File " << fn << " exists. "; \
+        BOOST_THROW_EXCEPTION( FileExists() << ExceptionInfoString(fn##_ss.str()) ); \
+    }
 
 #define EXCEPTION_EIGEN_ROW_MAJOR(m) \
     {\
