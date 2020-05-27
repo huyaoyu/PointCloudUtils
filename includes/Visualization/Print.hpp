@@ -27,7 +27,7 @@ static void print_bar( const std::string &s, int n=80,
     }
 
     // ========== Print. ==========
-    std::cout << prefix << bar.str() << " " << s << " " << bar.str() << suffix << std::endl;
+    std::cout << prefix << bar.str() << " " << s << " " << bar.str() << suffix << "\n";
 }
 
 #endif //POINTCLOUDUTILS_INCLUDES_VISUALIZATION_PRINT_HPP

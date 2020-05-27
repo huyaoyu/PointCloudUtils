@@ -66,6 +66,16 @@ void convert_camera_poses_2_pcl(
     std::cout << "Convert camera poses to PCL point cloud in " << te << " ms. " << std::endl;
 }
 
+template < typename rT >
+pcl::PointCloud<pcl::PointNormal>::Ptr convert_camera_poses_2_pcl(
+        const Eigen::MatrixX<rT>& quat, const Eigen::MatrixX<rT>& pos ) {
+    pcl::PointCloud<pcl::PointNormal>::Ptr pOutput ( new pcl::PointCloud<pcl::PointNormal> );
+
+    convert_camera_poses_2_pcl( quat, pos, pOutput );
+
+    return pOutput;
+}
+
 }
 
 #endif //POINTCLOUDUTILS_CAMERAPOSE2PCL_HPP

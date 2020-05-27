@@ -230,6 +230,14 @@ add_executable(${EXE_HOLE_BOUNDARY_DETECTION}
         src/HoleBoundaryDetection/HoleBoundaryDetection.cpp)
 target_link_libraries(${EXE_HOLE_BOUNDARY_DETECTION} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
+set(EXE_FILTER_CAM_BBOX FilterCamerasByBBox)
+add_executable(${EXE_FILTER_CAM_BBOX} src/HoleBoundaryDetection/FilterCamerasByBBox.cpp)
+target_link_libraries(${EXE_FILTER_CAM_BBOX}
+        Threads::Threads
+        ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
+        Eigen3::Eigen
+        ${PCL_LIBRARIES})
+
 set(EXE_BUILD_OCP_MAP BuildOccupancyMap)
 add_executable(${EXE_BUILD_OCP_MAP}
         src/HoleBoundaryDetection/BuildOccupancyMap.cpp)

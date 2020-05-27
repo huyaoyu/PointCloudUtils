@@ -16,6 +16,15 @@
 #include "DataInterfaces/CSV/csv.h"
 #include "Profiling/SimpleTime.hpp"
 
+template < typename rT >
+struct CamPoseCSVRepresentation {
+    Eigen::VectorXi id;
+    Eigen::MatrixX<rT> quat;
+    Eigen::MatrixX<rT> pos;
+
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+};
+
 /**
  * Read the camera poses stored in a CSV file.
  * The CSV file have 8 columns. The definitions of the columns are:
@@ -69,6 +78,12 @@ void read_camera_poses_csv(const std::string& fn,
     QUICK_TIME_END(te)
 
     std::cout << "Read camera poses from CSV file in " << te << " ms. " << std::endl;
+}
+
+template < typename rT >
+void read_camera_poses_csv(const std::string& fn,
+                           CamPoseCSVRepresentation<rT> &cpCSVR ) {
+    read_camera_poses_csv(fn, cpCSVR.id, cpCSVR.quat, cpCSVR.pos);
 }
 
 #endif //POINTCLOUDUTILS_CAMERA_GEOMETRY_IO_HPP
