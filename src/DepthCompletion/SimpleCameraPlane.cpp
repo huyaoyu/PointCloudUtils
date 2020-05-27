@@ -540,14 +540,17 @@ public:
         bool flag = true;
 
         if ( fMVS < 0 ) {
+            std::cout << AS_F_MVS << " must be positive. " << fMVS << " is given. \n";
             flag = false;
         }
 
         if ( fLiDAR < 0 ) {
+            std::cout << AS_F_LIDAR << " must be positive. " << fLiDAR << " is given. \n";
             flag = false;
         }
 
         if ( fPrior < 0 ) {
+            std::cout << AS_F_PRIOR << " must be positive. " << fPrior << " is given. \n";
             flag = false;
         }
 
@@ -647,9 +650,7 @@ static void write_points_as_pcl( const std::string& fn,
     pcu::write_point_cloud<pcl::PointXYZ>(fn, pPC);
 }
 
-int main( int argc, char** argv ) {
-    google::InitGoogleLogging(argv[0]);
-
+void run( int argc, char** argv ) {
     QUICK_TIME_START(te)
 
     std::cout << "Hello, Simple! " << std::endl;
@@ -700,7 +701,7 @@ int main( int argc, char** argv ) {
     // Fill the missing depth.
     Eigen::MatrixXf croppedFilled;
     fill_depth_map( croppedDepthMap, initialGuess, croppedFlagMap, croppedFilled,
-            args.fMVS, args.fLiDAR, args.fPrior );
+                    args.fMVS, args.fLiDAR, args.fPrior );
     // Test only.
 //    croppedFilled = croppedDepthMap;
 
@@ -708,7 +709,7 @@ int main( int argc, char** argv ) {
     Eigen::MatrixXf filled3D;
     Eigen::MatrixXf boundaryPixelMatrix = tableBoundaryPixels.transpose();
     collect_filled_points_3d( croppedFilled, croppedFlagMap, x0, y0,
-            boundaryPixelMatrix, *pCamProj, filled3D );
+                              boundaryPixelMatrix, *pCamProj, filled3D );
 
     // Test output directory.
     test_directory(args.outDir);
@@ -728,6 +729,22 @@ int main( int argc, char** argv ) {
     QUICK_TIME_END(te)
 
     std::cout << "Simple filling in " << te << " ms. " << std::endl;
+}
+
+int main( int argc, char** argv ) {
+    google::InitGoogleLogging(argv[0]);
+
+    try {
+        run(argc, argv);
+    } catch (exception_common_base &ex) {
+        std::cerr << "Exception: " << EXCEPTION_DIAG_INFO(ex) << std::endl;
+        return 1;
+    } catch (std::exception &ex) {
+        std::cerr << "Exception: " << ex.what() << std::endl;
+        return 1;
+    }
+
+    std::cerr << "No exceptions. Program ends normally. \n";
 
     return 0;
 }

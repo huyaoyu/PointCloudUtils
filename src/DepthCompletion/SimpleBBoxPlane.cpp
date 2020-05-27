@@ -661,9 +661,7 @@ static void parse_args(int argc, char* argv[], Args& args) {
     }
 }
 
-int main( int argc, char** argv ) {
-    google::InitGoogleLogging(argv[0]);
-
+void run( int argc, char** argv ) {
     QUICK_TIME_START(te)
 
     std::cout << "Hello, Simple! " << std::endl;
@@ -736,7 +734,7 @@ int main( int argc, char** argv ) {
     // Fill the missing depth.
     Eigen::MatrixXf filled;
     fill_depth_map( initialDepthMap, initialGuess, flagMap, filled,
-            args.fMVS, args.fLiDAR, args.fPrior );
+                    args.fMVS, args.fLiDAR, args.fPrior );
 
     // Get the points in the polygon.
     Eigen::MatrixXf inPolygon, nonMVSPoints;
@@ -776,6 +774,22 @@ int main( int argc, char** argv ) {
     QUICK_TIME_END(te)
 
     std::cout << "Simple filling in " << te << " ms. " << std::endl;
+}
+
+int main( int argc, char** argv ) {
+    google::InitGoogleLogging(argv[0]);
+
+    try {
+        run(argc, argv);
+    } catch (exception_common_base &ex) {
+        std::cerr << "Exception: " << EXCEPTION_DIAG_INFO(ex) << std::endl;
+        return 1;
+    } catch (std::exception &ex) {
+        std::cerr << "Exception: " << ex.what() << std::endl;
+        return 1;
+    }
+
+    std::cerr << "No exceptions. Program ends normally. \n";
 
     return 0;
 }

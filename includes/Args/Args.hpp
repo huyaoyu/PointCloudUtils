@@ -15,21 +15,21 @@
 
 #include "Exception/Common.hpp"
 
-struct args_invalidation_failed : virtual exception_common_base {};
+struct args_validation_failed : virtual exception_common_base {};
 
 #define EXCEPTION_INVALID_ARGUMENTS(args) \
     {\
         std::stringstream args##_ss;\
         args##_ss << "Arguments validation failed. " << std::endl \
                   << args << std::endl;\
-        BOOST_THROW_EXCEPTION( args_invalidation_failed() << ExceptionInfoString(args##_ss.str()) );\
+        BOOST_THROW_EXCEPTION( args_validation_failed() << ExceptionInfoString(args##_ss.str()) );\
     }
 
 #define EXCEPTION_INVALID_ARGUMENTS_IN_CLASS() \
     {\
         std::stringstream ss; \
         ss << "Arguments validation failed. \n" << *this << "\n"; \
-        BOOST_THROW_EXCEPTION( args_invalidation_failed() << ExceptionInfoString(ss.str()) );\
+        BOOST_THROW_EXCEPTION( args_validation_failed() << ExceptionInfoString(ss.str()) );\
     }
 
 #define MAIN_COMMON_LINES(argc, argv, args) \
