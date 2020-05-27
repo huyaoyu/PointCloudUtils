@@ -21,7 +21,7 @@ namespace pcu {
 template<typename T>
 typename pcl::PointCloud<T>::Ptr read_point_cloud(const std::string &fn) {
     // ========== Read the point cloud from the file. ==========
-    std::cout << "Loading points from " << fn << " ... " << std::endl;
+    std::cout << "Loading points from " << fn << " ... \n";
 
     QUICK_TIME_START(teReadPointCloud);
 
@@ -34,7 +34,7 @@ typename pcl::PointCloud<T>::Ptr read_point_cloud(const std::string &fn) {
     }
     QUICK_TIME_END(teReadPointCloud);
 
-    std::cout << pOutCloud->size() << " points loaded in " << teReadPointCloud << "ms. " << std::endl;
+    std::cout << pOutCloud->size() << " points loaded in " << teReadPointCloud << "ms. \n";
 
     return pOutCloud;
 }
@@ -42,7 +42,7 @@ typename pcl::PointCloud<T>::Ptr read_point_cloud(const std::string &fn) {
 template<typename T>
 void read_point_cloud(const std::string &fn, typename pcl::PointCloud<T>::Ptr &pOutCloud) {
     // ========== Read the point cloud from the file. ==========
-    std::cout << "Loading points from " << fn << " ... " << std::endl;
+    std::cout << "Loading points from " << fn << " ... \n";
 
     QUICK_TIME_START(teReadPointCloud);
     if (pcl::io::loadPLYFile<T>(fn, *pOutCloud) == -1) {
@@ -52,7 +52,7 @@ void read_point_cloud(const std::string &fn, typename pcl::PointCloud<T>::Ptr &p
     }
     QUICK_TIME_END(teReadPointCloud);
 
-    std::cout << pOutCloud->size() << " points loaded in " << teReadPointCloud << "ms. " << std::endl;
+    std::cout << pOutCloud->size() << " points loaded in " << teReadPointCloud << "ms. \n";
 }
 
 template < typename pT, typename rT >
@@ -67,12 +67,12 @@ void write_point_cloud( const std::string& fn, const typename pcl::PointCloud<pT
     QUICK_TIME_START(te)
 
     pcl::PLYWriter writer;
-    std::cout << "Saving the filtered point cloud." << std::endl;
+    std::cout << "Saving the filtered point cloud. \n";
     writer.write(fn, *pOutput, flagBinary, false);
 
     QUICK_TIME_END(te)
 
-    std::cout << "Save the point cloud to " << fn << " in " << te << " ms. " << std::endl;
+    std::cout << "Save the point cloud to " << fn << " in " << te << " ms. \n";
 }
 
 } // namespace pcu.

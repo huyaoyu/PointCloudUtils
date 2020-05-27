@@ -7,12 +7,24 @@
 
 #include <fstream>
 #include <iostream>
+#include <regex>
 #include <sstream>
 #include <string>
 #include <vector>
 
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string.hpp>
+
+#include "Exception/Common.hpp"
+
+struct DirectoryNotExist : virtual exception_common_base {};
+
+#define EXCEPTION_DIR_NOT_EXIST(d) \
+    {\
+        std::stringstream d##_ss; \
+        d##_ss << "Directory " << d << " does not exist. "; \
+        BOOST_THROW_EXCEPTION( DirectoryNotExist() << ExceptionInfoString(d##_ss.str()) ); \
+    }
 
 std::vector<std::string> get_file_parts(const std::string& path) {
     boost::filesystem::path p(path);
@@ -89,6 +101,33 @@ std::vector<std::string> read_file_list(const std::string& fn)
     ifs.close();
 
     return fList;
+}
+
+std::vector<std::string> find_files_recursively( const std::string &pathStr, const std::string &pattern ) {
+    namespace fs = boost::filesystem;
+
+    fs::path path(pathStr);
+
+    if ( !fs::exists(path) || !fs::is_directory(path) ) {
+        EXCEPTION_DIR_NOT_EXIST(pathStr)
+    }
+
+    fs::recursive_directory_iterator iter(path);
+    fs::recursive_directory_iterator end;
+
+    std::regex re(pattern);
+
+    std::vector<std::string> files;
+    while ( iter != end ) {
+        if ( fs::is_regular_file(*iter) ) {
+            if ( std::regex_search( iter->path().string(), re ) ) {
+                files.push_back( iter->path().string() );
+            }
+        }
+        ++iter;
+    }
+
+    return files;
 }
 
 #endif //POINTCLOUDUTILS_FILESYSTEM_HPP

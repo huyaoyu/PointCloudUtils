@@ -135,6 +135,12 @@ add_executable(${EXE_TOOL_ICP}
 target_link_libraries(${EXE_TOOL_ICP} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
         Eigen3::Eigen ${PCL_LIBRARIES})
 
+set(EXE_TOOL_SEARCH_MERGE Tool_SearchMergePointClouds)
+add_executable(${EXE_TOOL_SEARCH_MERGE}
+        src/Tools/SearchMergePointClouds.cpp)
+target_link_libraries(${EXE_TOOL_SEARCH_MERGE} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
+        Eigen3::Eigen ${PCL_LIBRARIES})
+
 # ========== Trials. ==========
 
 set(EXE_TRY_DISJOINT_SET Trial_TryDisjointSet)
