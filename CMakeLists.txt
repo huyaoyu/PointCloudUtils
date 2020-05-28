@@ -100,7 +100,7 @@ target_link_libraries(${LIB_OCCUPANCY_MAP}
 
 # ========== Tools. ==========
 
-set(EXE_TOOL_DOWNSAMPLE DownSample)
+set(EXE_TOOL_DOWNSAMPLE Tool_DownSample)
 add_executable(${EXE_TOOL_DOWNSAMPLE} src/Tools/DownSample.cpp)
 target_link_libraries(${EXE_TOOL_DOWNSAMPLE} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 

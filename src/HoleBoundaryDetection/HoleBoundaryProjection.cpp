@@ -256,6 +256,9 @@ static BoundaryPointSets filter_boundary_point_sets_by_occupancy_map(
             filteredBPS.pEquivalentNormals->push_back(
                     boundaryPointSets.pEquivalentNormals->at(i) );
             filteredBPS.candidateSets.emplace_back( indices );
+        } else {
+            std::cout << "Boundary candidate " << i
+                      << " is near an occlusion region. \n";
         }
     }
 
