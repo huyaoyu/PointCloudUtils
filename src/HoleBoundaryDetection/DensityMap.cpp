@@ -14,6 +14,7 @@
 #include <pcl/kdtree/kdtree_flann.h>
 
 #include "Args/Args.hpp"
+#include "Exception/Common.hpp"
 #include "Filesystem/Filesystem.hpp"
 #include "PCCommon/IO.hpp"
 #include "Visualization/tinycolormap/include/tinycolormap.hpp"
@@ -31,6 +32,9 @@ public:
     bool validate() {
         bool flag = true;
 
+        flag = radius > 0;
+        flag = threshold > 0;
+
         return flag;
     }
 
@@ -39,6 +43,7 @@ public:
         out << Args::AS_IN_LIDAR << ": " << args.inLiDAR << std::endl;
         out << Args::AS_OUT_FILE << ": " << args.outFile << std::endl;
         out << Args::AS_RADIUS << ": " << args.radius << std::endl;
+        out << Args::AS_THRES << ": " << args.threshold << std::endl;
 
         return out;
     }
@@ -48,18 +53,21 @@ public:
     static const std::string AS_IN_LIDAR;
     static const std::string AS_OUT_FILE;
     static const std::string AS_RADIUS;
+    static const std::string AS_THRES;
 
 public:
-    std::string inMVS; // The target point cloud.
+    std::string inMVS;   // The target point cloud.
     std::string inLiDAR; // The reference point cloud.
     std::string outFile; // The output file.
-    float radius; // The search radius of the kd-tree.
+    float radius;        // The search radius of the kd-tree.
+    int threshold;       // Points whose neighbors are less or equal to this threshold are extracted.
 };
 
-const std::string Args::AS_IN_MVS = "inMVS";
+const std::string Args::AS_IN_MVS   = "inMVS";
 const std::string Args::AS_IN_LIDAR = "inLiDAR";
 const std::string Args::AS_OUT_FILE = "outFile";
-const std::string Args::AS_RADIUS = "radius";
+const std::string Args::AS_RADIUS   = "radius";
+const std::string Args::AS_THRES    = "threshold";
 
 static void parse_args(int argc, char* argv[], Args& args) {
 
@@ -69,15 +77,18 @@ static void parse_args(int argc, char* argv[], Args& args) {
 
         optDesc.add_options()
                 ("help", "Produce help message.")
-                (Args::AS_IN_MVS.c_str(), bpo::value< std::string >(&args.inMVS)->required(), "The input MVS point cloud.")
-                (Args::AS_IN_LIDAR.c_str(), bpo::value< std::string >(&args.inLiDAR)->required(), "The input LiDAR point cloud.")
-                (Args::AS_OUT_FILE.c_str(), bpo::value< std::string >(&args.outFile)->required(), "The output file.")
-                (Args::AS_RADIUS.c_str(), bpo::value< float >(&args.radius)->required(), "The radius for the kd-tree");
+                (Args::AS_IN_MVS.c_str(), bpo::value< std::string >(&args.inMVS)->required(), "The input MVS point cloud. ")
+                (Args::AS_IN_LIDAR.c_str(), bpo::value< std::string >(&args.inLiDAR)->required(), "The input LiDAR point cloud. ")
+                (Args::AS_OUT_FILE.c_str(), bpo::value< std::string >(&args.outFile)->required(), "The output file. ")
+                (Args::AS_RADIUS.c_str(), bpo::value< float >(&args.radius)->required(), "The radius for the kd-tree. ")
+                (Args::AS_THRES.c_str(), bpo::value<int>(&args.threshold)->required(), "The threshold. ");
 
         bpo::positional_options_description posOptDesc;
         posOptDesc.add(Args::AS_IN_MVS.c_str(), 1
         ).add(Args::AS_IN_LIDAR.c_str(), 1
-        ).add(Args::AS_OUT_FILE.c_str(), 1);
+        ).add(Args::AS_OUT_FILE.c_str(), 1
+        ).add(Args::AS_RADIUS.c_str(), 1
+        ).add(Args::AS_THRES.c_str(), 1);
 
         bpo::variables_map optVM;
         bpo::store(bpo::command_line_parser(argc, argv).
@@ -88,6 +99,10 @@ static void parse_args(int argc, char* argv[], Args& args) {
     {
         std::cout << e.what() << std::endl;
         throw(e);
+    }
+
+    if ( !args.validate() ) {
+        EXCEPTION_INVALID_ARGUMENTS(args)
     }
 }
 
@@ -175,6 +190,34 @@ static pcl::PointCloud<pcl::PointXYZRGB>::Ptr convert_intensity_2_rgb(
     return pRGB;
 }
 
+static pcl::PointCloud<pcl::PointXYZI>::Ptr extract_by_intensity(
+        const pcl::PointCloud<pcl::PointXYZI>::Ptr pInput,
+        int threshold ) {
+
+    assert( threshold > 0 );
+
+    const std::size_t N = pInput->size();
+
+    pcl::PointCloud<pcl::PointXYZI>::Ptr pOutput ( new pcl::PointCloud<pcl::PointXYZI> );
+
+    for ( std::size_t i = 0; i < N; ++i ) {
+        const pcl::PointXYZI &point = pInput->at(i);
+        if ( point.intensity > threshold ) {
+            continue;
+        }
+
+        pcl::PointXYZI xyzi;
+        xyzi.x = point.x;
+        xyzi.y = point.y;
+        xyzi.z = point.z;
+        xyzi.intensity = point.intensity;
+
+        pOutput->push_back( xyzi );
+    }
+
+    return pOutput;
+}
+
 int main( int argc, char* argv[] ) {
     QUICK_TIME_START(te)
 
@@ -208,6 +251,12 @@ int main( int argc, char* argv[] ) {
     std::vector<std::string> parts = get_file_parts(args.outFile);
     std::string outRGB = parts[0] + "/" + parts[1] + "_RGB" + parts[2];
     pcu::write_point_cloud<pcl::PointXYZRGB>(outRGB, pRGB);
+
+    // Extract by intensity.
+    pcl::PointCloud<pcl::PointXYZI>::Ptr pExtracted =
+            extract_by_intensity( pOutput, args.threshold );
+    std::string outExtracted = parts[0] + "/" + parts[1] + "_Extracted" + parts[2];
+    pcu::write_point_cloud<pcl::PointXYZI>(outExtracted, pExtracted);
 
     QUICK_TIME_END(te)
 

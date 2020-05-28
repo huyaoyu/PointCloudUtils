@@ -298,10 +298,12 @@ static CPs_t read_cam_projs( const std::string &fn ) {
 
 static PCPtr_t read_and_merge_pcl_point_clouds(
         const std::string &fnMVS,
-        const std::string &fnLiDAR ) {
+        const std::string &fnLiDAR,
+        PCPtr_t &pLiDAR ) {
     // Read the MVS and LiDAR point clouds.
     PCPtr_t pMVS = pcu::read_point_cloud<P_t>(fnMVS);
-    PCPtr_t pLiDAR = pcu::read_point_cloud<P_t>(fnLiDAR);
+//    PCPtr_t pLiDAR = pcu::read_point_cloud<P_t>(fnLiDAR);
+    pLiDAR = pcu::read_point_cloud<P_t>(fnLiDAR);
 
     // Merge the MVS and LiDAR point clouds.
     PCPtr_t pMerged ( new pcl::PointCloud<P_t> );
@@ -317,6 +319,7 @@ static PCPtr_t read_and_merge_pcl_point_clouds(
 }
 
 static void build( const PCPtr_t pMerged,
+        const PCPtr_t pLiDAR,
         const CPs_t &camProjs,
         pcu::OccupancyMap &ocpMap,
         bool flagCUDA=false ) {
@@ -327,6 +330,9 @@ static void build( const PCPtr_t pMerged,
     } else {
         build_occupancy_map<P_t, Real_t>( pMerged, camProjs, ocpMap );
     }
+
+    ocpMap.update_occupancy_by_pcl<P_t>(pLiDAR);
+
     std::cout << "octomap has " << ocpMap.get_octree().getNumLeafNodes() << " leaf nodes. \n";
 
     // Find frontiers.
@@ -343,12 +349,13 @@ int main(int argc, char** argv) {
     CPs_t camProjs = read_cam_projs(args.inCamProj);
 
     // Read the MVS and LiDAR point clouds and merge.
-    PCPtr_t pMerged = read_and_merge_pcl_point_clouds( args.inMVS, args.inLiDAR );
+    PCPtr_t pLiDAR;
+    PCPtr_t pMerged = read_and_merge_pcl_point_clouds( args.inMVS, args.inLiDAR, pLiDAR );
 
     // Occupancy map.
     pcu::OccupancyMap ocMap;
     ocMap.initialize(0.05);
-    build( pMerged, camProjs, ocMap, args.flagCUDA );
+    build( pMerged, pLiDAR, camProjs, ocMap, args.flagCUDA );
 
     // Write the occupancy map and frontier CSV..
     {

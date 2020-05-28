@@ -57,6 +57,9 @@ public:
     void build_from_pcl_and_cam_proj(const typename pcl::PointCloud<pT>::Ptr pInCloud,
                                      const std::vector<CameraProjection<rT> > &camProjs);
 
+    template < typename pT >
+    void update_occupancy_by_pcl( const typename pcl::PointCloud<pT>::Ptr pInCloud);
+
     void find_frontiers();
     std::size_t num_frontiers() const { return nFrontiers; };
     bool check_frontier( float x, float y, float z ) const;
@@ -150,6 +153,17 @@ void OccupancyMap::build_from_pcl_and_cam_proj(
         const std::vector<CameraProjection<rT> > &camProjs) {
     OccupancyMapBuilder<rT> omb;
     omb.template build_occupancy_map<pT, f_map::FrontierOcTreeNode>(pInCloud, camProjs, pFrontierOcTree.get());
+}
+
+template < typename pT >
+void OccupancyMap::update_occupancy_by_pcl( const typename pcl::PointCloud<pT>::Ptr pInCloud) {
+    const int N = pInCloud->size();
+    for ( int i = 0; i < N; ++i ) {
+        const auto& pclPoint = pInCloud->at(i);
+        pFrontierOcTree->updateNode( pclPoint.x, pclPoint.y, pclPoint.z, true, true );
+    }
+
+    pFrontierOcTree->updateInnerOccupancy();
 }
 
 template < typename pT >
