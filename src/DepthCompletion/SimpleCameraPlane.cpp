@@ -232,12 +232,47 @@ struct CF_Prior_5 {
         residual[0] = rT(0.25*factor) * (
                 ceres::abs( n3[0] - n0[0] ) +
                 ceres::abs( n1[0] - n0[0] ) +
-                ceres::abs( n4[0] - n0[0] ) +
-                ceres::abs( n2[0] - n0[0] ) );
+                ceres::abs( n2[0] - n0[0] ) +
+                ceres::abs( n4[0] - n0[0] ) );
 
-        residual[0] += rT(factor) * (
-                ceres::abs( n3[0] - rT(2) * n0[0] + n1[0] ) +
-                ceres::abs( n4[0] - rT(2) * n0[0] + n2[0] ) );
+//        residual[0] = rT(0.0);
+
+//        residual[0] += rT(0.5*factor) * (
+//                ceres::abs( n3[0] - rT(2) * n0[0] + n1[0] ) +
+//                ceres::abs( n4[0] - rT(2) * n0[0] + n2[0] ) );
+
+        return true;
+    }
+
+private:
+    const double factor;
+};
+
+struct CF_Prior_FirstOrder {
+    CF_Prior_FirstOrder(double f) : factor(f) {}
+
+    template < typename rT >
+    bool operator() ( const rT* const n0, const rT* const nn,
+            rT* residual ) const {
+        residual[0] = rT(factor) * ( nn[0] - n0[0] );
+        
+        return true;
+    }
+
+private:
+    const double factor;
+};
+
+struct CF_Prior_SecondOrder {
+    CF_Prior_SecondOrder(double f) : factor(f) {}
+
+    template < typename rT >
+    bool operator() (
+            const rT* const n0,
+            const rT* const n1,
+            const rT* const n2,
+            rT* residual ) const {
+        residual[0] = rT(factor) * ( n2[0] - rT(2.0)*n0[0] + n1[0] );
 
         return true;
     }
@@ -321,10 +356,28 @@ static void build_op_problem(
             }
 
             // prior term.
+//            {
+//                ceres::CostFunction* cf =
+//                        new ceres::AutoDiffCostFunction<CF_Prior_5, 1, 1, 1, 1, 1, 1>( new CF_Prior_5(fPrior) );
+//                problem.AddResidualBlock( cf, nullptr, vDepth );
+//            }
+
             {
                 ceres::CostFunction* cf =
-                        new ceres::AutoDiffCostFunction<CF_Prior_5, 1, 1, 1, 1, 1, 1>( new CF_Prior_5(fPrior) );
-                problem.AddResidualBlock( cf, nullptr, vDepth );
+                        new ceres::AutoDiffCostFunction<CF_Prior_FirstOrder, 1, 1, 1>( new CF_Prior_FirstOrder(fPrior) );
+                problem.AddResidualBlock( cf, nullptr, vDepth[0], vDepth[1] );
+                problem.AddResidualBlock( cf, nullptr, vDepth[0], vDepth[2] );
+                problem.AddResidualBlock( cf, nullptr, vDepth[0], vDepth[3] );
+                problem.AddResidualBlock( cf, nullptr, vDepth[0], vDepth[4] );
+            }
+
+            {
+                ceres::CostFunction* cf =
+                        new ceres::AutoDiffCostFunction<CF_Prior_SecondOrder, 1, 1, 1, 1>(
+                                new CF_Prior_SecondOrder(fPrior) );
+                problem.AddResidualBlock( cf, nullptr, vDepth[0], vDepth[3], vDepth[1] );
+                problem.AddResidualBlock( cf, nullptr, vDepth[0], vDepth[4], vDepth[2] );
+
             }
         }
     }

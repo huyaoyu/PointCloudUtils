@@ -26,6 +26,7 @@ namespace bpt = boost::posix_time;
 typedef struct Args {
     std::string inFile;
     std::string outFile;
+    bool flagMLS;
     int mlsPolyOrder;
     double mlsRadius;
     bool flagRemoveOutlier;
@@ -44,6 +45,7 @@ void parse_args(int argc, char* argv[], Args_t& args) {
                 ("help", "produce help message")
                 ("infile", bpo::value< std::string >(&(args.inFile))->required(), "input file")
                 ("outfile", bpo::value< std::string >(&(args.outFile))->required(), "input file")
+                ("mls", bpo::value< int >()->implicit_value(1), "Set this flag for MLS filter. ")
                 ("mls-poly-order", bpo::value< int >(&args.mlsPolyOrder)->default_value(2), "The order of the polynomial for the MLS filter.")
                 ("mls-radius", bpo::value< double >(&args.mlsRadius)->default_value(0.05), "The search radius of the MLS. Unit m.")
                 ("remove-outlier", bpo::value< int >()->implicit_value(1), "Set this flag to enable outlier removal.")
@@ -62,6 +64,12 @@ void parse_args(int argc, char* argv[], Args_t& args) {
             args.flagRemoveOutlier = true;
         } else {
             args.flagRemoveOutlier = false;
+        }
+
+        if ( optVM.count("mls") ) {
+            args.flagMLS = true;
+        } else {
+            args.flagMLS = false;
         }
     }
     catch(std::exception& e)
@@ -108,17 +116,21 @@ int main(int argc, char* argv[]) {
         tempPC = pInput;
     }
 
-    // Create a KD-Tree.
-    pcl::search::KdTree<pcl::PointNormal>::Ptr tree ( new pcl::search::KdTree<pcl::PointNormal> );
-
     // MLS.
-    pcl::MovingLeastSquares<pcl::PointNormal, pcl::PointNormal> mls;
-    mls.setComputeNormals(true);
-    mls.setPolynomialOrder(2);
-    mls.setSearchMethod(tree);
-    mls.setSearchRadius(0.05);
-    mls.setInputCloud(tempPC);
-    mls.process(*pOutput);
+    if ( args.flagMLS ) {
+        // Create a KD-Tree.
+        pcl::search::KdTree<pcl::PointNormal>::Ptr tree ( new pcl::search::KdTree<pcl::PointNormal> );
+
+        pcl::MovingLeastSquares<pcl::PointNormal, pcl::PointNormal> mls;
+        mls.setComputeNormals(true);
+        mls.setPolynomialOrder(args.mlsPolyOrder);
+        mls.setSearchMethod(tree);
+        mls.setSearchRadius(args.mlsRadius);
+        mls.setInputCloud(tempPC);
+        mls.process(*pOutput);
+    } else {
+        pOutput = tempPC;
+    }
 
     // Save the filtered point cloud.
     pcl::PLYWriter writer;

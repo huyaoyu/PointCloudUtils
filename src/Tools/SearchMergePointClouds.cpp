@@ -32,9 +32,10 @@ public:
     }
 
     friend std::ostream& operator<<(std::ostream& out, const Args& args) {
-        out << args.AS_IN_DIR  << ": " << args.inDir   << "\n";
-        out << args.AS_PATTERN << ": " << args.pattern << "\n";
-        out << args.AS_OUT_DIR << ": " << args.outDir  << "\n";
+        out << args.AS_IN_DIR   << ": " << args.inDir    << "\n";
+        out << args.AS_PATTERN  << ": " << args.pattern  << "\n";
+        out << args.AS_OUT_DIR  << ": " << args.outDir   << "\n";
+        out << args.AS_OUT_NAME << ": " << args.outName  << "\n";
 
         return out;
     }
@@ -48,7 +49,8 @@ public:
                     ("help", "Produce help message.")
                     (AS_IN_DIR.c_str(), bpo::value<std::string>(&inDir)->required(), "The input directory. ")
                     (AS_PATTERN.c_str(), bpo::value<std::string>(&pattern)->required(), "The search pattern. ")
-                    (AS_OUT_DIR.c_str(), bpo::value<std::string>(&outDir)->required(), "The output file. ");
+                    (AS_OUT_DIR.c_str(), bpo::value<std::string>(&outDir)->required(), "The output file. ")
+                    (AS_OUT_NAME.c_str(), bpo::value<std::string>(&outName)->default_value("FilledMerged.ply"), "The output filename. ");
 
             bpo::positional_options_description posOptDesc;
             posOptDesc.add(AS_IN_DIR.c_str(), 1
@@ -72,13 +74,15 @@ public:
     }
 
 public:
-    const std::string AS_IN_DIR  = "in-dir";
-    const std::string AS_PATTERN = "pattern";
-    const std::string AS_OUT_DIR = "out-dir";
+    const std::string AS_IN_DIR   = "in-dir";
+    const std::string AS_PATTERN  = "pattern";
+    const std::string AS_OUT_DIR  = "out-dir";
+    const std::string AS_OUT_NAME = "out-name";
 
     std::string inDir;
     std::string pattern;
     std::string outDir; // The output directory.
+    std::string outName;
 };
 
 int main( int argc, char** argv ) {
@@ -104,7 +108,7 @@ int main( int argc, char** argv ) {
     std::cout << pMerged->size() << " points from "
               << files.size() << " point clouds. \n";
 
-    std::string outFn = args.outDir + "/FilledMerged.ply";
+    std::string outFn = args.outDir + "/" + args.outName;
     pcu::write_point_cloud<P_t>(outFn, pMerged);
 
     QUICK_TIME_SHOW(teMain, "SearchMergePointClouds")
