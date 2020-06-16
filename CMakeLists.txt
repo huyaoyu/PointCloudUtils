@@ -141,6 +141,13 @@ add_executable(${EXE_TOOL_SEARCH_MERGE}
 target_link_libraries(${EXE_TOOL_SEARCH_MERGE} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
         Eigen3::Eigen ${PCL_LIBRARIES})
 
+set(EXE_TOOL_MERGE Tool_Merge)
+add_executable(${EXE_TOOL_MERGE} src/Tools/Merge.cpp)
+target_link_libraries(${EXE_TOOL_MERGE}
+        ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
+        Eigen3::Eigen
+        ${PCL_LIBRARIES})
+
 # ========== Trials. ==========
 
 set(EXE_TRY_DISJOINT_SET Trial_TryDisjointSet)
