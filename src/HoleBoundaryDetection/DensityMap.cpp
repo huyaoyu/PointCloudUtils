@@ -35,6 +35,9 @@ public:
 
         flag = radius > 0;
         flag = threshold > 0;
+        flag = radiusPost > 0;
+        flag = thresholdPost > 0;
+        flag = roundsPost >= 0;
 
         return flag;
     }
@@ -47,6 +50,7 @@ public:
         out << Args::AS_THRES << ": " << args.threshold << std::endl;
         out << Args::AS_RADIUS_POST << ": " << args.radiusPost << std::endl;
         out << Args::AS_THRES_POST << ": " << args.thresholdPost << std::endl;
+        out << Args::AS_ROUNDS_POST << ": " << args.roundsPost << std::endl;
 
         return out;
     }
@@ -59,6 +63,7 @@ public:
     static const std::string AS_THRES;
     static const std::string AS_RADIUS_POST;
     static const std::string AS_THRES_POST;
+    static const std::string AS_ROUNDS_POST;
 
 public:
     std::string inMVS;   // The target point cloud.
@@ -68,6 +73,7 @@ public:
     int threshold;       // Points whose neighbors are less or equal to this threshold are extracted.
     float radiusPost;    // The radius of the filter for the post process.
     int thresholdPost;   // Points that have more neighbors than thresholdPost in radius of radiusPost are kept.
+    int roundsPost;      // Number of rounds of post processing.
 };
 
 const std::string Args::AS_IN_MVS       = "inMVS";
@@ -77,6 +83,7 @@ const std::string Args::AS_RADIUS       = "radius";
 const std::string Args::AS_THRES        = "threshold";
 const std::string Args::AS_RADIUS_POST  = "radius-post";
 const std::string Args::AS_THRES_POST   = "threshold-post";
+const std::string Args::AS_ROUNDS_POST  = "rounds-post";
 
 static void parse_args(int argc, char* argv[], Args& args) {
 
@@ -91,8 +98,9 @@ static void parse_args(int argc, char* argv[], Args& args) {
                 (Args::AS_OUT_FILE.c_str(), bpo::value< std::string >(&args.outFile)->required(), "The output file. ")
                 (Args::AS_RADIUS.c_str(), bpo::value< float >(&args.radius)->required(), "The radius for the kd-tree. ")
                 (Args::AS_THRES.c_str(), bpo::value<int>(&args.threshold)->required(), "The threshold. ")
-                (Args::AS_RADIUS_POST.c_str(), bpo::value<float>(&args.radiusPost)->required(), "The radius for post-process. ")
-                (Args::AS_THRES_POST.c_str(), bpo::value<int>(&args.thresholdPost)->required(), "The threshold for the post-process. ");
+                (Args::AS_RADIUS_POST.c_str(), bpo::value<float>(&args.radiusPost)->default_value(0.05), "The radius for post-process. ")
+                (Args::AS_THRES_POST.c_str(), bpo::value<int>(&args.thresholdPost)->default_value(5), "The threshold for the post-process. ")
+                (Args::AS_ROUNDS_POST.c_str(), bpo::value<int>(&args.roundsPost)->default_value(0), "The number of rounds for the post-process ");
 
         bpo::positional_options_description posOptDesc;
         posOptDesc.add(Args::AS_IN_MVS.c_str(), 1
@@ -100,8 +108,7 @@ static void parse_args(int argc, char* argv[], Args& args) {
         ).add(Args::AS_OUT_FILE.c_str(), 1
         ).add(Args::AS_RADIUS.c_str(), 1
         ).add(Args::AS_THRES.c_str(), 1
-        ).add(Args::AS_RADIUS_POST.c_str(), 1
-        ).add(Args::AS_THRES_POST.c_str(), 1);
+        );
 
         bpo::variables_map optVM;
         bpo::store(bpo::command_line_parser(argc, argv).
@@ -231,13 +238,16 @@ static pcl::PointCloud<pcl::PointXYZI>::Ptr extract_by_intensity(
     return pOutput;
 }
 
+template <typename pT>
+struct FilterByRadius {
+    typename pcl::PointCloud<pT>::Ptr pExtracted;
+    int nd; // Number of removed dangling points.
+};
 
 template < typename pT, typename rT >
-static typename pcl::PointCloud<pT>::Ptr filter_out_dangling_points(
+static FilterByRadius<pT> filter_by_radius(
         const typename pcl::PointCloud<pT>::Ptr& pInput,
         rT radius, int thres ) {
-    QUICK_TIME_START(te)
-
     typename pcl::PointCloud<pT>::Ptr pOutput (new pcl::PointCloud<pT>);
 
     typename pcl::KdTreeFLANN<pT>::Ptr tree ( new pcl::KdTreeFLANN<pT> );
@@ -250,8 +260,8 @@ static typename pcl::PointCloud<pT>::Ptr filter_out_dangling_points(
     std::vector<int> indexR;
     std::vector<float> squaredDistanceR;
 
-    int idx;
     int fn = 0;
+    int dn = 0; // Number of dangling points.
 
     for ( int i = 0; i < n; ++i ) {
         indexR.clear();
@@ -261,6 +271,8 @@ static typename pcl::PointCloud<pT>::Ptr filter_out_dangling_points(
 
         if ( fn >= thres ) {
             indices->indices.push_back(i);
+        } else {
+            dn++;
         }
     }
 
@@ -277,11 +289,37 @@ static typename pcl::PointCloud<pT>::Ptr filter_out_dangling_points(
         pOutput = pInput;
     }
 
+    return { pOutput, dn };
+}
+
+template < typename pT, typename rT >
+static typename pcl::PointCloud<pT>::Ptr filter_out_dangling_points(
+        const typename pcl::PointCloud<pT>::Ptr& pInput,
+        rT radius, int thres, int rounds=1 ) {
+    QUICK_TIME_START(te)
+
+    assert(radius >  0);
+    assert(thres  >  0);
+    assert(rounds >= 1);
+
+    typename pcl::PointCloud<pT>::Ptr temp = pInput;
+    FilterByRadius<pT> fbr;
+
+    for ( int i = 0; i < rounds; ++i ) {
+        fbr = filter_by_radius<pT>( temp, radius, thres );
+
+        if ( fbr.nd == 0 ) {
+            break;
+        }
+
+        temp = fbr.pExtracted;
+    }
+
     QUICK_TIME_END(te)
 
     std::cout << "Filter dangling points in " << te << "ms. " << std::endl;
 
-    return pOutput;
+    return fbr.pExtracted;
 }
 
 int main( int argc, char* argv[] ) {
@@ -325,11 +363,15 @@ int main( int argc, char* argv[] ) {
     pcu::write_point_cloud<pcl::PointXYZI>(outExtracted, pExtracted);
 
     // Extract dangling points.
-    pcl::PointCloud<pcl::PointXYZI>::Ptr pDanglingFiltered =
-            filter_out_dangling_points<pcl::PointXYZI, float>(
-                    pExtracted, args.radiusPost, args.thresholdPost );
-    std::string outDanglingFiltered = parts[0] + "/" + parts[1] + "_DanglingFiltered" + parts[2];
-    pcu::write_point_cloud<pcl::PointXYZI>(outDanglingFiltered, pDanglingFiltered);
+    if ( args.roundsPost != 0 ) {
+        pcl::PointCloud<pcl::PointXYZI>::Ptr pDanglingFiltered =
+                filter_out_dangling_points<pcl::PointXYZI, float>(
+                        pExtracted, args.radiusPost, args.thresholdPost, args.roundsPost );
+        std::string outDanglingFiltered = parts[0] + "/" + parts[1] + "_DanglingFiltered" + parts[2];
+        pcu::write_point_cloud<pcl::PointXYZI>(outDanglingFiltered, pDanglingFiltered);
+    } else {
+        std::cout << "No dangling point removal required. \n";
+    }
 
     QUICK_TIME_END(te)
 

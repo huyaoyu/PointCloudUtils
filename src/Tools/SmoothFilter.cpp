@@ -7,7 +7,6 @@
 #include <string>
 #include <vector>
 
-//#include <boost/assert.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 
@@ -80,7 +79,7 @@ void parse_args(int argc, char* argv[], Args_t& args) {
 }
 
 int main(int argc, char* argv[]) {
-    std::cout << "Hello, PCL!" << std::endl;
+    std::cout << "========== Hello, SmoothFilter! ==========\n";
 
     Args_t args;
 
@@ -103,12 +102,15 @@ int main(int argc, char* argv[]) {
 
     pcl::PointCloud<pcl::PointNormal>::Ptr tempPC( new pcl::PointCloud<pcl::PointNormal> );
 
+    // Outlier removal.
     if ( args.flagRemoveOutlier ) {
         // Apply the statistical outlier removal filter .
         pcl::StatisticalOutlierRemoval<pcl::PointNormal> sor;
         sor.setInputCloud(pInput);
         sor.setMeanK(args.meanK);
         sor.setStddevMulThresh(args.stdDevMulThresh);
+
+        std::cout << "sor.getStddevMulThresh() = " << sor.getStddevMulThresh() << "\n";
 
         std::cout << "Filtering... " << std::endl;
         sor.filter(*tempPC);
@@ -134,7 +136,7 @@ int main(int argc, char* argv[]) {
 
     // Save the filtered point cloud.
     pcl::PLYWriter writer;
-    std::cout << "Saving the filtered point cloud." << std::endl;
+    std::cout << "Saving " << args.outFile << "\n";
     writer.write(args.outFile, *pOutput, true, false);
 
     return 0;
