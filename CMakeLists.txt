@@ -124,6 +124,10 @@ set(EXE_TOOL_CLUSTER_FILTER ClusterFilter)
 add_executable(${EXE_TOOL_CLUSTER_FILTER} src/Tools/ClusterFilter.cpp)
 target_link_libraries(${EXE_TOOL_CLUSTER_FILTER} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
 
+set(EXE_TOOL_COLOR_FILTER Tool_ColorFilter)
+add_executable(${EXE_TOOL_COLOR_FILTER} src/Tools/ColorFilter.cpp)
+target_link_libraries(${EXE_TOOL_COLOR_FILTER} ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS} Eigen3::Eigen ${PCL_LIBRARIES})
+
 set(EXE_TOOL_SHADOW_CROP Tool_ShadowCrop)
 add_executable(${EXE_TOOL_SHADOW_CROP}
         src/Tools/ShadowCrop.cpp)

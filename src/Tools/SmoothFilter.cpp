@@ -10,13 +10,17 @@
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 
+#include <Eigen/Dense>
+
 #include <pcl/io/ply_io.h>
+#include <pcl/common/centroid.h>
 #include <pcl/point_types.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/surface/mls.h>
 #include <pcl/filters/statistical_outlier_removal.h>
 
 #include "Args/Args.hpp"
+#include "PCCommon/NormalHelpers.hpp"
 
 // Namespaces.
 namespace bpo = boost::program_options;
@@ -28,6 +32,7 @@ typedef struct Args {
     bool flagMLS;
     int mlsPolyOrder;
     double mlsRadius;
+    bool flagFlipNormal;
     bool flagRemoveOutlier;
     int meanK;
     double stdDevMulThresh;
@@ -47,6 +52,7 @@ void parse_args(int argc, char* argv[], Args_t& args) {
                 ("mls", bpo::value< int >()->implicit_value(1), "Set this flag for MLS filter. ")
                 ("mls-poly-order", bpo::value< int >(&args.mlsPolyOrder)->default_value(2), "The order of the polynomial for the MLS filter.")
                 ("mls-radius", bpo::value< double >(&args.mlsRadius)->default_value(0.05), "The search radius of the MLS. Unit m.")
+                ("mls-flip-normal", bpo::value< int >()->implicit_value(1), "Set this flag to flip the normal with respect to the centroid. ")
                 ("remove-outlier", bpo::value< int >()->implicit_value(1), "Set this flag to enable outlier removal.")
                 ("mean-k", bpo::value< int >(&args.meanK)->default_value(10), "mean k, number of nearest neighbours")
                 ("std-dev-mul-t", bpo::value< double >(&args.stdDevMulThresh)->default_value(1.0), "standard deviation multiplier");
@@ -69,6 +75,12 @@ void parse_args(int argc, char* argv[], Args_t& args) {
             args.flagMLS = true;
         } else {
             args.flagMLS = false;
+        }
+
+        if ( optVM.count("mls-flip-normal") ) {
+            args.flagFlipNormal = true;
+        } else {
+            args.flagFlipNormal = false;
         }
     }
     catch(std::exception& e)
@@ -130,6 +142,14 @@ int main(int argc, char* argv[]) {
         mls.setSearchRadius(args.mlsRadius);
         mls.setInputCloud(tempPC);
         mls.process(*pOutput);
+
+        if ( args.flagFlipNormal ) {
+            // Flip the normal.
+            // Compute the centroid of the point cloud.
+            Eigen::Vector4f centroid;
+            pcl::compute3DCentroid(*pInput, centroid);
+            pcu::flip_normal_inplace<pcl::PointNormal>(pOutput, centroid);
+        }
     } else {
         pOutput = tempPC;
     }

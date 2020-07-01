@@ -4,6 +4,7 @@ Data/
 data/
 WD/
 cmake-build-debug/
+cmake-build-release/
 .idea/
 *.png
 *.jpg

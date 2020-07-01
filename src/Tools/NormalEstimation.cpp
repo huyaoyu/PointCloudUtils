@@ -21,11 +21,11 @@
 #include <pcl/common/centroid.h>
 #include <pcl/common/io.h> // From copyPointCloud().
 #include <pcl/common/point_tests.h>
-#include <pcl/features/normal_3d.h>
 #include <pcl/surface/mls.h>
 
 #include "Args/Args.hpp"
 #include "Filesystem/Filesystem.hpp"
+#include "PCCommon/NormalHelpers.hpp"
 #include "Profiling/SimpleTime.hpp"
 
 // Namespaces.
@@ -203,43 +203,6 @@ static void moving_least_square(const typename pcl::PointCloud<inT>::Ptr& pInput
     std::cout << "Moving least square in " << te << "ms. " << std::endl;
 }
 
-/**
- * Flip the normal stored in a pcl::PointNormal typed point cloud.
- *
- * @param pInput The input point cloud.
- * @param vx The x coordinate of the view point.
- * @param vy The y coordinate of the view point.
- * @param vz The z coordinate of the view point.
- */
-static void flip_normal_inplace( pcl::PointCloud<pcl::PointNormal>::Ptr& pInput,
-                          const float vx, const float vy, const float vz ) {
-    QUICK_TIME_START(te)
-
-    std::cout << "Start flipping the normal. " << std::endl;
-
-    // Loop over all the points in the point cloud.
-    for ( auto iter = pInput->begin(); iter != pInput->end(); iter++ ) {
-        if ( pcl::isFinite(*iter) ) {
-            pcl::flipNormalTowardsViewpoint( *iter, vx, vy, vz,
-                    (*iter).normal_x, (*iter).normal_y, (*iter).normal_z );
-        }
-    }
-
-    QUICK_TIME_END(te)
-    std::cout << "Execute flip_normal_inplace() in " << te << "ms. " << std::endl;
-}
-
-/**
- * Flip the normal stored in a pcl::PointNormal typed point cloud.
- *
- * @param pInput The input point cloud.
- * @param vp The viewing point, with the last element being 1.
- */
-static void flip_normal_inplace( pcl::PointCloud<pcl::PointNormal>::Ptr& pInput,
-        const Eigen::Vector4f& vp ) {
-    flip_normal_inplace(pInput, vp(0), vp(1), vp(2));
-}
-
 int main(int argc, char* argv[]) {
     QUICK_TIME_START(teMain)
 
@@ -282,7 +245,7 @@ int main(int argc, char* argv[]) {
         // Compute the centroid of the point cloud.
         Eigen::Vector4f centroid;
         pcl::compute3DCentroid(*pInput, centroid);
-        flip_normal_inplace(pOutput, centroid);
+        pcu::flip_normal_inplace<pcl::PointNormal>(pOutput, centroid);
     } else {
         // Should never be here.
         std::stringstream ss;
