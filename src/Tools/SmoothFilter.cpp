@@ -33,6 +33,7 @@ typedef struct Args {
     int mlsPolyOrder;
     double mlsRadius;
     bool flagFlipNormal;
+    bool flagFlipNormalOpposite;
     bool flagRemoveOutlier;
     int meanK;
     double stdDevMulThresh;
@@ -53,6 +54,7 @@ void parse_args(int argc, char* argv[], Args_t& args) {
                 ("mls-poly-order", bpo::value< int >(&args.mlsPolyOrder)->default_value(2), "The order of the polynomial for the MLS filter.")
                 ("mls-radius", bpo::value< double >(&args.mlsRadius)->default_value(0.05), "The search radius of the MLS. Unit m.")
                 ("mls-flip-normal", bpo::value< int >()->implicit_value(1), "Set this flag to flip the normal with respect to the centroid. ")
+                ("mls-flip-normal-opposite", bpo::value< int >()->implicit_value(1), "Set this flag after setting --mls-flip-normal to flip normal vectors in the opposite way. ")
                 ("remove-outlier", bpo::value< int >()->implicit_value(1), "Set this flag to enable outlier removal.")
                 ("mean-k", bpo::value< int >(&args.meanK)->default_value(10), "mean k, number of nearest neighbours")
                 ("std-dev-mul-t", bpo::value< double >(&args.stdDevMulThresh)->default_value(1.0), "standard deviation multiplier");
@@ -81,6 +83,12 @@ void parse_args(int argc, char* argv[], Args_t& args) {
             args.flagFlipNormal = true;
         } else {
             args.flagFlipNormal = false;
+        }
+
+        if ( optVM.count("mls-flip-normal-opposite") ) {
+            args.flagFlipNormalOpposite = true;
+        } else {
+            args.flagFlipNormalOpposite = false;
         }
     }
     catch(std::exception& e)
@@ -148,7 +156,7 @@ int main(int argc, char* argv[]) {
             // Compute the centroid of the point cloud.
             Eigen::Vector4f centroid;
             pcl::compute3DCentroid(*pInput, centroid);
-            pcu::flip_normal_inplace<pcl::PointNormal>(pOutput, centroid);
+            pcu::flip_normal_inplace<pcl::PointNormal>(pOutput, centroid, args.flagFlipNormalOpposite);
         }
     } else {
         pOutput = tempPC;
