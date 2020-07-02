@@ -37,6 +37,7 @@ message(STATUS "OpenCV_VERSION = ${OpenCV_VERSION}")
 message(STATUS "OpenCV_INCLUDE_DIRS = ${OpenCV_INCLUDE_DIRS}")
 message(STATUS "OpenCV_INSTALL_PATH = ${OpenCV_INSTALL_PATH}")
 
+# cnpy.
 FIND_LIBRARY( LIB_CNPY NAMES cnpy )
 message(STATUS "LIB_CNPY=${LIB_CNPY}")
 
