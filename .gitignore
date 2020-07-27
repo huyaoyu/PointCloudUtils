@@ -11,4 +11,6 @@ cmake-build-release/
 *.pp3
 *.bmp
 *.pyc
+*.xyz
+src/Mesh/Scripts/.vscode/
 

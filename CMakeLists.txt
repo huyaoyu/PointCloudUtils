@@ -193,3 +193,6 @@ target_link_libraries(${EXE_DEPTH_CPL_SIMPLE_BBOX}
         ${OpenCV_LIBRARIES} ${LIB_CV_COMMON}
         ${CERES_LIBRARIES}
         ${LIB_CNPY})
+
+# ========== Mesh applications by CGAL5 ==========
+add_subdirectory(src/Mesh)
