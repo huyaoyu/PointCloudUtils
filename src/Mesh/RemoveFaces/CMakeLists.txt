@@ -36,4 +36,6 @@ target_compile_definitions(${EXE_REMOVE_FACES} PRIVATE TINYPLY_IMPLEMENTATION)
 target_compile_definitions( ${EXE_REMOVE_FACES} PRIVATE CGAL_PMP_USE_CERES_SOLVER )
 
 #target_link_libraries(${EXE_REMOVE_FACES} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../includes)
-target_link_libraries(${EXE_REMOVE_FACES} PUBLIC ${CGAL_LIBRARIES} CGAL::CGAL_Qt5 ceres)
+target_link_libraries(${EXE_REMOVE_FACES} PUBLIC
+        ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
+        ${CGAL_LIBRARIES} CGAL::CGAL_Qt5 ceres)

@@ -84,16 +84,19 @@ int main( int argc, char** argv ) {
     std::cout << "Hello, Merge! \n";
     MAIN_COMMON_LINES_ONE_CLASS(argc, argv, args)
 
-    std::vector<std::string> parts = get_file_parts( args.inJSON );
+//    std::vector<std::string> parts = get_file_parts( args.inJSON );
 
     std::shared_ptr<JSON> pParams = read_json( args.inJSON );
 
     std::vector<std::string> files = (*pParams)["clouds"].get< std::vector<std::string> >();
+    auto baseDir = (*pParams)["baseDir"].get<std::string>();
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr pMerged ( new pcl::PointCloud<pcl::PointXYZ> );
 
     for ( const auto &f : files ) {
-        std::string fn = parts[0] + "/" + f;
+        std::stringstream ss;
+        ss << baseDir << "/" << f;
+        std::string fn = ss.str();
         std::cout << fn << "\n";
 
         pcl::PointCloud<pcl::PointXYZ>::Ptr pInCloud = pcu::read_point_cloud<pcl::PointXYZ>( fn );

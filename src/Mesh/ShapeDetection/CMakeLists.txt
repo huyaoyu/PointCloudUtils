@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project( FillHoles )
+project( Mesh_ShapeDetection )
 
 set(CMAKE_CXX_STANDARD 14)
 
@@ -18,24 +18,21 @@ find_package( Boost REQUIRED )
 #dump_cmake_variables(Boost)
 
 if ( NOT Boost_FOUND )
-
     message(STATUS "This project requires the Boost library, and will not be compiled.")
-
     return()
-
 endif()
 
 find_package(Ceres REQUIRED)
 #dump_cmake_variables(Ceres)
 
-set(EXE_FILL_HOLES Mesh_FillHoles)
+set(EXE_MESH_SHAPE_DETECTION Mesh_ShapeDetection)
 
-add_executable(${EXE_FILL_HOLES} FillHoles.cpp)
+add_executable(${EXE_MESH_SHAPE_DETECTION} ShapeDetection.cpp)
 
-target_compile_definitions(${EXE_FILL_HOLES} PRIVATE TINYPLY_IMPLEMENTATION)
-target_compile_definitions( ${EXE_FILL_HOLES} PRIVATE CGAL_PMP_USE_CERES_SOLVER )
+target_compile_definitions(${EXE_MESH_SHAPE_DETECTION} PRIVATE TINYPLY_IMPLEMENTATION)
+target_compile_definitions( ${EXE_MESH_SHAPE_DETECTION} PRIVATE CGAL_PMP_USE_CERES_SOLVER )
 
-#target_link_libraries(${EXE_FILL_HOLES} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../includes)
-target_link_libraries(${EXE_FILL_HOLES} PUBLIC ${CGAL_LIBRARIES} CGAL::CGAL_Qt5 ceres
+#target_link_libraries(${EXE_MESH_SHAPE_DETECTION} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../includes)
+target_link_libraries(${EXE_MESH_SHAPE_DETECTION} PUBLIC ${CGAL_LIBRARIES} CGAL::CGAL_Qt5 ceres
         ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
         ${PCL_LIBRARIES})

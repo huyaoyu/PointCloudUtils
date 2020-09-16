@@ -14,6 +14,7 @@
 
 #include <CGAL/Polygon_mesh_processing/border.h>
 #include <CGAL/Polygon_mesh_processing/detect_features.h>
+#include <CGAL/Polygon_mesh_processing/repair.h>
 #include <CGAL/Polygon_mesh_processing/self_intersections.h>
 #include <CGAL/Polygon_mesh_processing/smooth_mesh.h>
 
@@ -22,6 +23,10 @@
 #include <CGAL/Handle_hash_function.h>
 
 #include <boost/unordered_set.hpp>
+
+#include "Args/ArgsParser.hpp"
+#include "CGALCommon/IO.hpp"
+#include "Filesystem/Filesystem.hpp"
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel Kernel_t;
 typedef Kernel_t::Point_3              Point_t;
@@ -77,20 +82,37 @@ static void write_mesh_off( const std::string &fn,
     ofs.close();
 }
 
+static ap::Args handle_args( int argc, char** argv ) {
+    ap::Args args;
+
+    args.add_positional<std::string>("in-mesh", "Input mesh. ");
+    args.add_positional<std::string>("out-dir", "Output directory. ");
+    args.add_positional<std::string>("out-name", "Output mesh filename relative to out-dir. ");
+    args.add_flag("smooth", "Set this flag to enable smoothing. ");
+
+    args.parse_args( argc, argv );
+
+    std::cout << args;
+
+    return args;
+}
+
 int main( int argc, char **argv ) {
     std::cout << "Hello, RemoveFaces! \n";
+
+    auto args = handle_args( argc, argv );
+
+    std::string inMeshFn  = args.arguments<std::string>["in-mesh"]->get();
+    std::string outDir    = args.arguments<std::string>["out-dir"]->get();
+    std::string outFn     = args.arguments<std::string>["out-name"]->get();
+    const bool flagSmooth = args.arguments<bool>["smooth"]->get();
+
+    test_directory( outDir );
 
     // Load the mesh.
     Mesh_t surfaceMesh;
 
-    std::ifstream ifs( argv[1], std::ios::binary );
-
-    if ( !ifs ) {
-        throw std::runtime_error("Cannot open file. ");
-    }
-
-    CGAL::read_off( ifs, surfaceMesh );
-    ifs.close();
+    read_mesh_ply( inMeshFn, surfaceMesh );
 
     // Loop over all the intersected faces and remove them.
     std::cout << "Collecting intersected faces. \n";
@@ -116,20 +138,24 @@ int main( int argc, char **argv ) {
     }
 //    surfaceMesh.collect_garbage();
 
-    write_mesh_off( "FacesRemoved.off", surfaceMesh );
-    std::cout << "File saved to FacesRemoved.off. \n";
+//    write_mesh_off( "FacesRemoved.off", surfaceMesh );
+//    std::cout << "File saved to FacesRemoved.off. \n";
 
     std::vector< std::vector< VertexDesc_t > > duplicatedVertices;
     int newVerticesNB = pmp::duplicate_non_manifold_vertices(
             surfaceMesh, CGAL::parameters::output_iterator( std::back_inserter( duplicatedVertices ) ) );
     std::cout << "newVerticesNB = " << newVerticesNB << "\n";
-    write_mesh_off( "NonManifoldVertexDuplicated.off", surfaceMesh );
+//    write_mesh_off( "NonManifoldVertexDuplicated.off", surfaceMesh );
 
     // Smoothing.
-    smooth_mesh( surfaceMesh );
+    if ( flagSmooth ) smooth_mesh( surfaceMesh );
 
-    write_mesh_off( "Smoothed.off", surfaceMesh );
-    std::cout << "File saved to Smoothed.off. \n";
+    {
+        std::stringstream ss;
+        ss << outDir << "/" << outFn;
+        write_mesh_ply( ss.str(), surfaceMesh );
+        std::cout << "File saved to " << ss.str() <<". \n";
+    }
 
     return 0;
 }

@@ -58,6 +58,7 @@ public:
         out << Args::AS_IN_CLOUD << ": " << args.inFile << std::endl;
         out << Args::AS_OUT_FILE << ": " << args.outFile << std::endl;
         out << Args::AS_COMPUTE_TYPE << ": " << args.computeType << std::endl;
+        out << Args::AS_FLIP_OPPOSITE << ": " << args.flagFlipOpposite << std::endl;
         out << Args::AS_POLY_ORDER << ": " << args.polyOrder << std::endl;
         out << Args::AS_RADIUS << ": " << args.radius << std::endl;
 
@@ -68,6 +69,7 @@ public:
     static const std::string AS_IN_CLOUD; // AS stands for argument string
     static const std::string AS_OUT_FILE;
     static const std::string AS_COMPUTE_TYPE;
+    static const std::string AS_FLIP_OPPOSITE;
     static const std::string AS_POLY_ORDER;
     static const std::string AS_RADIUS;
 
@@ -78,16 +80,18 @@ public:
     std::string inFile; // The input point cloud file.
     std::string outFile; // The output file.
     std::string computeType; // The type of computation performed for estimating the normal.
+    bool flagFlipOpposite; // A flag enables opposite flip.
     std::vector<std::string> validComputeTypeList;
     int polyOrder; // The order of the polynomial.
     double radius; // The search radius.
 };
 
 const std::string Args::AS_IN_CLOUD      = "infile";
-const std::string Args::AS_OUT_FILE     = "outfile";
-const std::string Args::AS_COMPUTE_TYPE = "compute-type";
-const std::string Args::AS_POLY_ORDER   = "poly-order";
-const std::string Args::AS_RADIUS       = "radius";
+const std::string Args::AS_OUT_FILE      = "outfile";
+const std::string Args::AS_COMPUTE_TYPE  = "compute-type";
+const std::string Args::AS_FLIP_OPPOSITE = "flip-opposite";
+const std::string Args::AS_POLY_ORDER    = "poly-order";
+const std::string Args::AS_RADIUS        = "radius";
 
 const std::string Args::VAS_COMPUTE_TYPE_MLS = "MLS";
 const std::string Args::VAS_COMPUTE_TYPE_NE  = "NE";
@@ -99,6 +103,8 @@ Args::Args()
 
 static void parse_args(int argc, char* argv[], Args& args) {
 
+    int flagFlipValue = 0;
+
     try
     {
         bpo::options_description optDesc("Find the hole boundary points of a point cloud.");
@@ -108,6 +114,7 @@ static void parse_args(int argc, char* argv[], Args& args) {
                 (Args::AS_IN_CLOUD.c_str(), bpo::value< std::string >(&(args.inFile))->required(), "Input file.")
                 (Args::AS_OUT_FILE.c_str(), bpo::value< std::string >(&(args.outFile))->required(), "Output file.")
                 (Args::AS_COMPUTE_TYPE.c_str(), bpo::value< std::string >(&args.computeType)->default_value(Args::VAS_COMPUTE_TYPE_MLS), "The computation type, MLS or NE.")
+                (Args::AS_FLIP_OPPOSITE.c_str(), bpo::value< int >( &flagFlipValue )->default_value(0)->implicit_value(1), "Set this flag to enable opposite flip. ")
                 (Args::AS_POLY_ORDER.c_str(), bpo::value< int >(&args.polyOrder)->default_value(2), "The order of the polynomial.")
                 (Args::AS_RADIUS.c_str(), bpo::value<double>(&args.radius)->default_value(0.05), "The search radius.");
 
@@ -118,6 +125,12 @@ static void parse_args(int argc, char* argv[], Args& args) {
         bpo::store(bpo::command_line_parser(argc, argv).
                 options(optDesc).positional(posOptDesc).run(), optVM);
         bpo::notify(optVM);
+
+        if ( optVM.count(Args::AS_FLIP_OPPOSITE.c_str()) ) {
+            args.flagFlipOpposite = true;
+        } else {
+            args.flagFlipOpposite = false;
+        }
     }
     catch(std::exception& e)
     {
@@ -211,7 +224,6 @@ int main(int argc, char* argv[]) {
     // Handle the command line.
     Args args;
     parse_args(argc, argv, args);
-
     std::cout << "args: " << std::endl;
     std::cout << args << std::endl;
 
@@ -245,7 +257,7 @@ int main(int argc, char* argv[]) {
         // Compute the centroid of the point cloud.
         Eigen::Vector4f centroid;
         pcl::compute3DCentroid(*pInput, centroid);
-        pcu::flip_normal_inplace<pcl::PointNormal>(pOutput, centroid);
+        pcu::flip_normal_inplace<pcl::PointNormal>(pOutput, centroid, args.flagFlipOpposite);
     } else {
         // Should never be here.
         std::stringstream ss;

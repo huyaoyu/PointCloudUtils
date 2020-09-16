@@ -19,9 +19,13 @@
 #include <CGAL/boost/graph/iterator.h>
 #include <CGAL/Handle_hash_function.h>
 
+#include <pcl/point_types.h>
+#include <pcl/point_cloud.h>
+
 #include "Args/ArgsParser.hpp"
 #include "CGALCommon/IO.hpp"
 #include "Filesystem/Filesystem.hpp"
+#include "PCCommon/IO.hpp"
 #include "Profiling/ScopeTimer.hpp"
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel Kernel_t;
@@ -231,7 +235,7 @@ static int remesh_by_facet_set(
 
         pmp::isotropic_remeshing(
                 facetSet,
-                0.05,
+                0.01,
                 mesh,
                 pmp::parameters::number_of_iterations(3)
                         .protect_constraints(false)
@@ -403,11 +407,29 @@ static std::vector<typename MeshT::Point> pb_collect_points_by_facet_tag(
     return points;
 }
 
+template < typename CGALPoint_T, typename PCLPoint_T >
+static typename pcl::PointCloud<PCLPoint_T>::Ptr convert_cgal_point_2_pcl( const std::vector<CGALPoint_T> &cgalPoints ) {
+    assert( cgalPoints.size() > 0 );
+
+    typename pcl::PointCloud<PCLPoint_T>::Ptr pCloud( new pcl::PointCloud<PCLPoint_T> );
+
+    for ( const auto & point : cgalPoints ) {
+        PCLPoint_T pclPoint;
+        pclPoint.x = static_cast<float>( point.x() );
+        pclPoint.y = static_cast<float>( point.y() );
+        pclPoint.z = static_cast<float>( point.z() );
+        pCloud->push_back( pclPoint );
+    }
+
+    return pCloud;
+}
+
 static ap::Args handle_args( int argc, char** argv ) {
     ap::Args args;
 
     args.add_positional<std::string>("in-mesh", "Input surface mesh. ");
     args.add_positional<std::string>("working-dir", "Working directory. ");
+    args.add_positional<std::string>("out-points", "The filename for the output point cloud. ");
 
     args.parse_args( argc, argv );
 
@@ -421,8 +443,9 @@ int main( int argc, char** argv ) {
 
     ap::Args args = handle_args( argc, argv );
 
-    std::string inMeshFn   = args.arguments<std::string>["in-mesh"]->get();
-    std::string workingDir = args.arguments<std::string>["working-dir"]->get();
+    std::string inMeshFn    = args.arguments<std::string>["in-mesh"]->get();
+    std::string workingDir  = args.arguments<std::string>["working-dir"]->get();
+    std::string outPointsFn = args.arguments<std::string>["out-points"]->get();
 
     test_directory(workingDir);
 
@@ -454,11 +477,11 @@ int main( int argc, char** argv ) {
     std::vector< Point_t > points =
             pb_collect_points_by_facet_tag( surfaceMesh, FILLED_TAG_NAME, FILLED_TAG_FILLED );
 
-    {
-        std::stringstream ss;
-        ss << workingDir << "/HoleFilledCollectePoints.ply";
-        write_points_ply( ss.str(), points );
-    }
+//    write_points_ply( outPointsFn, points );
+
+    auto pCloud = convert_cgal_point_2_pcl<Point_t, pcl::PointXYZ>( points );
+
+    pcu::write_point_cloud<pcl::PointXYZ>( outPointsFn, pCloud );
 
     return 0;
 }

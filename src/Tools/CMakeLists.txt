@@ -56,3 +56,10 @@ target_link_libraries(${EXE_TOOL_MERGE}
         ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
         Eigen3::Eigen
         ${PCL_LIBRARIES})
+
+set(EXE_TOOL_FLIP_NORMAL Tool_FlipNormal)
+add_executable( ${EXE_TOOL_FLIP_NORMAL} FlipNormal.cpp )
+target_link_libraries( ${EXE_TOOL_FLIP_NORMAL}
+        ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
+        Eigen3::Eigen
+        ${PCL_LIBRARIES})
