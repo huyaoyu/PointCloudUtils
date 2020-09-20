@@ -3,16 +3,15 @@
 #include <string>
 #include <vector>
 
-//#include <boost/assert.hpp>
-#include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
 
 #include <pcl/io/ply_io.h>
 #include <pcl/point_types.h>
 #include <pcl/filters/voxel_grid.h>
 
 #include "Args/Args.hpp"
+#include "Filesystem/Filesystem.hpp"
+#include "Profiling/ScopeTimer.hpp"
 
 // Namespaces.
 namespace bpo = boost::program_options;
@@ -56,6 +55,7 @@ void parse_args(int argc, char* argv[], Args_t& args) {
 }
 
 int main(int argc, char* argv[]) {
+    NAMED_SCOPE_TIMER(main)
     std::cout << "Hello, PCL!" << std::endl;
 
     Args_t args;
@@ -90,6 +90,7 @@ int main(int argc, char* argv[]) {
     // Save the filtered point cloud.
     pcl::PLYWriter writer;
     std::cout << "Saving the filtered point cloud." << std::endl;
+    test_directory_by_filename(args.outFile);
     writer.write(args.outFile, output, true, false);
 
     return 0;
