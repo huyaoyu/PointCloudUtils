@@ -56,6 +56,33 @@ std::vector<std::uint32_t> CommonColor::colors = {
         0xFF64D13E
 };
 
+
+typedef std::uint8_t                 ColorByte_t;
+typedef std::array< ColorByte_t, 4 > Color_t;
+
+union RGBA {
+    std::uint32_t bgra;
+    struct {
+        std::uint8_t b;
+        std::uint8_t g;
+        std::uint8_t r;
+        std::uint8_t a;
+    };
+};
+
+Color_t next_color(CommonColor& cc) {
+    RGBA color;
+    color.bgra = cc.next();
+
+//    std::cout << "color = [ "
+//              << static_cast<int>( color.b ) << ", "
+//              << static_cast<int>( color.g ) << ", "
+//              << static_cast<int>( color.r ) << ", "
+//              << static_cast<int>( color.a ) << " ]\n";
+
+    return { color.r, color.g, color.b, color.a };
+}
+
 }
 
 #endif //POINTCLOUDUTILS_COLOR_HPP

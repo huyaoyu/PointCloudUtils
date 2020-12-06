@@ -67,7 +67,7 @@ static void isotropic_remesh( SurfaceMesh_t &mesh, double targetLength, int iter
                           boost::make_function_output_iterator(halfedge2edge(mesh, border)));
     PMP::split_long_edges(border, targetLength, mesh);
 
-    // Perform smooth.
+    // Perform remeshing.
     std::cout << "Start remeshing... \n";
     PMP::isotropic_remeshing(
             faces( mesh ),

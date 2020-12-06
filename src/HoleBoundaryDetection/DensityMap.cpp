@@ -351,7 +351,7 @@ int main( int argc, char* argv[] ) {
     pcu::write_point_cloud<pcl::PointXYZI>( args.outFile, pOutput );
 
     // Convert the intensity point cloud into RGB representation.
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr pRGB = convert_intensity_2_rgb( pOutput, 0, 30 );
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr pRGB = convert_intensity_2_rgb( pOutput, 0, args.threshold );
     std::vector<std::string> parts = get_file_parts(args.outFile);
     std::string outRGB = parts[0] + "/" + parts[1] + "_RGB" + parts[2];
     pcu::write_point_cloud<pcl::PointXYZRGB>(outRGB, pRGB);
@@ -359,16 +359,18 @@ int main( int argc, char* argv[] ) {
     // Extract by intensity.
     pcl::PointCloud<pcl::PointXYZI>::Ptr pExtracted =
             extract_by_intensity( pOutput, args.threshold );
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr pExtRGB = convert_intensity_2_rgb( pExtracted, 0, args.threshold );
     std::string outExtracted = parts[0] + "/" + parts[1] + "_Extracted" + parts[2];
-    pcu::write_point_cloud<pcl::PointXYZI>(outExtracted, pExtracted);
+    pcu::write_point_cloud<pcl::PointXYZRGB>(outExtracted, pExtRGB);
 
     // Extract dangling points.
     if ( args.roundsPost != 0 ) {
         pcl::PointCloud<pcl::PointXYZI>::Ptr pDanglingFiltered =
                 filter_out_dangling_points<pcl::PointXYZI, float>(
                         pExtracted, args.radiusPost, args.thresholdPost, args.roundsPost );
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr pExtRGBDanglingFiltered = convert_intensity_2_rgb( pDanglingFiltered, 0, args.threshold );
         std::string outDanglingFiltered = parts[0] + "/" + parts[1] + "_DanglingFiltered" + parts[2];
-        pcu::write_point_cloud<pcl::PointXYZI>(outDanglingFiltered, pDanglingFiltered);
+        pcu::write_point_cloud<pcl::PointXYZRGB>(outDanglingFiltered, pExtRGBDanglingFiltered);
     } else {
         std::cout << "No dangling point removal required. \n";
     }

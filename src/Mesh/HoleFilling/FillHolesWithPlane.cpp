@@ -620,6 +620,8 @@ static ap::Args handle_args( int argc, char** argv ) {
                              "The target edge length of the holefilled region after remeshing",
                              0.01);
 
+    args.add_flag("project", "Set this flag to enable plane projection. ");
+
     args.parse_args( argc, argv );
 
     std::cout << args;
@@ -636,6 +638,8 @@ int main( int argc, char** argv ) {
     std::string workingDir    = args.arguments<std::string>["working-dir"]->get();
     std::string outPointsFn   = args.arguments<std::string>["out-points"]->get();
     double filledSmoothLength = args.arguments<double>["filled-smooth-length"]->get();
+
+    const bool flagProject = args.arguments<bool>["project"]->get();
 
     test_directory(workingDir);
 
@@ -680,11 +684,13 @@ int main( int argc, char** argv ) {
     // Add hole tag face property.
     add_hole_tag_face_property( surfaceMesh, vPatchFacets, FILLED_TAG_NAME );
 
-    // Compute the vertex normal again.
-    estimate_vertex_normal( surfaceMesh, VERTEX_NORMAL_PROP_NAME );
+    if ( flagProject ) {
+        // Compute the vertex normal again.
+        estimate_vertex_normal( surfaceMesh, VERTEX_NORMAL_PROP_NAME );
 
-    // Move vertices.
-    move_facets_to_nearest_plane( surfaceMesh, vPatchFacets, holePlaneSets, planes, VERTEX_NORMAL_PROP_NAME );
+        // Move vertices.
+        move_facets_to_nearest_plane( surfaceMesh, vPatchFacets, holePlaneSets, planes, VERTEX_NORMAL_PROP_NAME );
+    }
 
 //    assert(false);
 

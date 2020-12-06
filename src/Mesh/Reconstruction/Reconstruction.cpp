@@ -16,8 +16,16 @@
 #include <CGAL/Advancing_front_surface_reconstruction.h>
 #include <CGAL/array.h>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/IO/write_ply_points.h>
 #include <CGAL/Polygon_mesh_processing/remesh.h>
+#include <CGAL/Real_timer.h>
 #include <CGAL/Surface_mesh.h>
+
+// Point cloud processing headers.
+#include <CGAL/compute_average_spacing.h>
+#include <CGAL/grid_simplify_point_set.h>
+#include <CGAL/jet_smooth_point_set.h>
+#include <CGAL/remove_outliers.h>
 
 #include <pcl/point_types.h>
 
@@ -40,6 +48,37 @@ typedef std::array< std::size_t, 3 > Facet_t;
 typedef CGAL::Exact_predicates_inexact_constructions_kernel Kernel_t;
 typedef Kernel_t::Point_3                                   Point3_t;
 typedef CGAL::Surface_mesh<Point3_t>                        SurfaceMesh_t;
+
+typedef CGAL::Parallel_if_available_tag ConcurrencyTag_t;
+
+struct ProgressStdCerrCallback {
+    ProgressStdCerrCallback( const std::string& name )
+    : name{name}, nb{0} {
+        timer.start();
+        tStart  = timer.time();
+        tLatest = tStart;
+    }
+
+    bool operator()(double advancement) {
+        ++nb;
+        if ( advancement != 1 && nb % 100 != 0 ) return true;
+
+        double t = timer.time();
+        if ( advancement == 1 || ( t - tLatest ) > 0.1 ) {
+            std::cerr << "\n"
+                      << name << ": " << static_cast<int>(advancement * 100) << "%";
+            tLatest = t;
+        }
+
+        return true;
+    }
+
+    const std::string name;
+    int nb;
+    CGAL::Real_timer timer;
+    double tStart;
+    double tLatest;
+};
 
 struct MeshConstructorByPointIndices {
     typedef typename boost::property_map< SurfaceMesh_t, boost::vertex_point_t >::type VPMap_t;
@@ -108,21 +147,78 @@ struct PriorityRadius {
 };
 
 static std::vector<Point3_t> read_points_from_ply( const std::string &fn ) {
-    typedef pcl::PointXYZ           pclP_t;
-    typedef pcl::PointCloud<pclP_t> pclPC_t;
+    return cgal_common::read_points_from_ply<Point3_t, CGAL::Identity_property_map<Point3_t>>(fn);
+}
 
-    pclPC_t::Ptr pInPCL = pcu::read_point_cloud<pclP_t>(fn);
+template < typename ContainerT >
+static void simplify_point_cloud( ContainerT& points, int nb=24 ) {
+    FUNCTION_SCOPE_TIMER
+    const auto averageSpacing = CGAL::compute_average_spacing<ConcurrencyTag_t>( points, nb );
+    points.erase( CGAL::grid_simplify_point_set( points, 4.0 * averageSpacing,
+                                                 CGAL::parameters::callback(
+                                                         ProgressStdCerrCallback("Grid simplification") ) ),
+                  points.end() );
+    std::cerr << "\n";
+}
 
-    const int N = pInPCL->size();
-    std::vector<Point3_t> cgalPoints;
-    cgalPoints.reserve( N );
+template < typename ContainerT >
+static ContainerT remove_outliers( ContainerT& points, int nb=24 ) {
+    FUNCTION_SCOPE_TIMER
+    const auto averageSpacing = CGAL::compute_average_spacing<ConcurrencyTag_t>( points, nb );
+    typename ContainerT::iterator firstToRemove =
+            CGAL::remove_outliers< ConcurrencyTag_t >(
+                    points, nb,
+                    CGAL::parameters::threshold_percent(100)
+                    .threshold_distance(2.0 * averageSpacing) );
 
-    for ( int i = 0; i < N; ++i ) {
-        const auto &pclPoint = (*pInPCL)[i];
-        cgalPoints.emplace_back( pclPoint.x, pclPoint.y, pclPoint.z );
+    std::cout << 100.0 * std::distance( firstToRemove, points.end() ) / points.size()
+              << "% of the point cloud are identified as outliers. "
+              << "Average spacing is " << averageSpacing << ". \n";
+
+    ContainerT newPoints( std::distance( points.begin(), firstToRemove ) );
+    std::copy( points.begin(), firstToRemove, newPoints.begin() );
+
+    return newPoints;
+}
+
+template < typename ContainerT >
+static void smooth_point_cloud( ContainerT& points, int nb=24 ) {
+    FUNCTION_SCOPE_TIMER
+    CGAL::jet_smooth_point_set<ConcurrencyTag_t>( points, nb,
+                                                  CGAL::parameters::callback(
+                                                          ProgressStdCerrCallback("Smoothing") ) );
+    std::cerr << "\n";
+}
+
+static void write_point_cloud(
+        const std::string& fn,
+        const std::vector<Point3_t>& points,
+        bool flagBinary=true ) {
+    std::ofstream ofs;
+
+    if ( flagBinary ) {
+        ofs.open( fn, std::ios::binary );
+        CGAL::set_binary_mode(ofs);
+    } else {
+        ofs.open( fn );
     }
 
-    return cgalPoints;
+    if (!ofs) {
+        std::stringstream ss;
+        ss << "Failed to open " << fn << " for writing. ";
+        throw std::runtime_error( ss.str() );
+    }
+
+    if ( !CGAL::write_ply_points(
+            ofs, points,
+            CGAL::parameters::point_map( CGAL::Identity_property_map<Point3_t>() ) ) ) {
+        ofs.close();
+        std::stringstream ss;
+        ss << "CGAL::write_ply_points() failed. ";
+        throw std::runtime_error( ss.str() );
+    }
+
+    ofs.close();
 }
 
 static void reconstruct_surface_mesh(
@@ -179,6 +275,15 @@ static ap::Args handle_args( int argc, char** argv ) {
     args.add_default<double>("beta-deg", "The beta angle in degree. ", 30.0);
     args.add_flag("clean-mesh", "Clean self-intersections and non-manifold vertices. ");
 
+    args.add_flag("simplify", "Simplification the point cloud. ");
+    args.add_default<int>("simplify-neighbors", "The number of neighbors used for simplification. ", 24);
+
+    args.add_flag("remove-outlier", "Set this flag to remove outliers.");
+    args.add_default<int>("remove-outlier-neighbors", "The number of neighbors used for removing outliers. ", 24);
+
+    args.add_flag("smoothing", "Set this flag to enable smoothing. ");
+    args.add_default<int>("smooth-neighbors", "The number of neighbors used for smoothing. ", 24);
+
     args.parse_args( argc, argv );
 
     std::cout << args;
@@ -200,10 +305,46 @@ int main( int argc, char **argv ) {
     const double betaDeg          = args.arguments<double>["beta-deg"]->get();
     const bool   flagCleanMesh    = args.arguments<bool>["clean-mesh"]->get();
 
+    const bool flagSimplify      = args.arguments<bool>["simplify"]->get();
+    const int  simplifyNeighbors = args.arguments<int>["simplify-neighbors"]->get();
+
+    const bool flagRemoveOutliers      = args.arguments<bool>["remove-outlier"]->get();
+    const int  removeOutliersNeighbors = args.arguments<int>["remove-outlier-neighbors"]->get();
+
+    const bool flagSmoothing   = args.arguments<bool>["smoothing"]->get();
+    const int  smoothNeighbors = args.arguments<int>["smooth-neighbors"]->get();
+
     test_directory( outDir );
 
     // Load the PLY point cloud by PCL and convert the points into CGAL point representation.
     auto points = read_points_from_ply( inCloudFn );
+
+    if ( flagSimplify ) {
+        std::cout << "Begin simplifying. \n";
+        simplify_point_cloud( points, simplifyNeighbors );
+
+        std::stringstream ss;
+        ss << outDir << "/Simplified.ply";
+        write_point_cloud( ss.str(), points );
+    }
+
+    if ( flagRemoveOutliers ) {
+        std::cout << "Begin removing outliers. \n";
+        points = remove_outliers( points, removeOutliersNeighbors );
+
+        std::stringstream ss;
+        ss << outDir << "/OutlierRemoved.ply";
+        write_point_cloud(ss.str(), points);
+    }
+
+    if ( flagSmoothing ) {
+        std::cout << "Begin smoothing. \n";
+        smooth_point_cloud( points, smoothNeighbors );
+
+        std::stringstream ss;
+        ss << outDir << "/Smoothed.ply";
+        write_point_cloud(ss.str(), points);
+    }
 
 //    // Test.
 //    const int N = points.size();

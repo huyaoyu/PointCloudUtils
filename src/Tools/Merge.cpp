@@ -78,6 +78,29 @@ public:
     std::string outFn; // The output directory.
 };
 
+template < typename P_T >
+static void merge_point_clouds(
+        const std::vector<std::string>& files,
+        const std::string& baseDir,
+        const std::string& outFn) {
+    typename pcl::PointCloud<P_T>::Ptr pMerged ( new pcl::PointCloud<P_T> );
+
+    for ( const auto &f : files ) {
+        std::stringstream ss;
+        ss << baseDir << "/" << f;
+        std::string fn = ss.str();
+        std::cout << fn << "\n";
+
+        typename pcl::PointCloud<P_T>::Ptr pInCloud = pcu::read_point_cloud<P_T>( fn );
+
+        *pMerged += (*pInCloud);
+    }
+
+    // Test the output directory.
+    test_directory_by_filename(outFn);
+    pcu::write_point_cloud<P_T>( outFn, pMerged);
+}
+
 int main( int argc, char** argv ) {
     QUICK_TIME_START(teMain)
 
@@ -90,24 +113,18 @@ int main( int argc, char** argv ) {
 
     std::vector<std::string> files = (*pParams)["clouds"].get< std::vector<std::string> >();
     auto baseDir = (*pParams)["baseDir"].get<std::string>();
+    auto type = (*pParams)["type"].get<std::string>();
 
-    pcl::PointCloud<pcl::PointXYZ>::Ptr pMerged ( new pcl::PointCloud<pcl::PointXYZ> );
-
-    for ( const auto &f : files ) {
+    if ( type == "XYZ" ) {
+        merge_point_clouds<pcl::PointXYZ>( files, baseDir, args.outFn );
+    } else if ( type == "XYZRGB" ) {
+        merge_point_clouds<pcl::PointXYZRGB>( files, baseDir, args.outFn );
+    } else if ( type == "Normal" ) {
+        merge_point_clouds<pcl::PointNormal>( files, baseDir, args.outFn );
+    } else {
         std::stringstream ss;
-        ss << baseDir << "/" << f;
-        std::string fn = ss.str();
-        std::cout << fn << "\n";
-
-        pcl::PointCloud<pcl::PointXYZ>::Ptr pInCloud = pcu::read_point_cloud<pcl::PointXYZ>( fn );
-
-        *pMerged += (*pInCloud);
-    }
-
-    {
-        // Test the output directory.
-        test_directory_by_filename(args.outFn);
-        pcu::write_point_cloud<pcl::PointXYZ>( args.outFn, pMerged);
+        ss << "type " << type << " is unexpected. ";
+        throw std::runtime_error( ss.str() );
     }
 
     QUICK_TIME_SHOW(teMain, "Merge")

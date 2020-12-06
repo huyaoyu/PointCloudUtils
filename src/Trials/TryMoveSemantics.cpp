@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #define SHOW_ARRAY(array, n) \
@@ -99,6 +100,84 @@ static std::vector<Value> create_values() {
 
     return valuesLocal;
 }
+
+class Container {
+public:
+    Container(const std::string& name, int n, int base)
+    : name{name}, n{n} {
+        array = new int[n];
+        for ( int i = 0; i < n; i++ )
+            array[i] = i + base;
+        std::cout << "Container " << this << " constructed. \n";
+    }
+
+    ~Container() {
+        delete [] std::exchange(array, nullptr);
+        n = 0;
+        std::cout << "Container " << this << " destroyed. \n";
+    }
+
+    Container( const Container& other )
+    : name{other.name}, n{other.n} {
+        array = new int[n];
+        for ( int i = 0; i < n; i++ )
+            array[i] = other.array[i];
+        std::cout << "Copy constructed Container. \n";
+    }
+
+    Container( Container&& other ) noexcept
+    : name{ std::exchange(other.name, std::string()) },
+      n{ std::exchange(other.n, 0) },
+      array{ std::exchange(other.array, nullptr) } {
+        std::cout << "Move constructed Container. \n";
+    }
+
+    Container& operator = ( const Container& other ) {
+        if ( this == &other ) return *this;
+
+        delete [] array;
+
+        name = other.name;
+        n    = other.n;
+        array = new int[n];
+
+        for ( int i = 0; i < n; i++ )
+            array[i] = other.array[i];
+
+        std::cout << "Copy assignment from " << &other << " to " << this << ". \n";
+
+        return *this;
+    }
+
+    Container& operator = ( Container&& other ) noexcept {
+        if ( this == &other ) return *this;
+
+        delete [] array;
+
+        name  = std::exchange(other.name, std::string());
+        n     = std::exchange(other.n, 0);
+        array = std::exchange( other.array, nullptr );
+
+        std::cout << "Move assignment from " << &other << " to " << this << ". \n";
+
+        return *this;
+    }
+
+    void show() {
+        if ( n > 0 ) {
+            std::cout << this << ": " << name << ": \n";
+            for ( int i = 0; i < n; ++i )
+                std::cout << i << ": " << array[i] << "\n";
+        } else {
+            std::cout << this << ": nothing left. \n";
+        }
+    }
+
+private:
+    std::string name;
+    int n;
+    int* array;
+};
 
 int main( int argc, char **argv ) {
     std::cout << "Hello, TryMoveSemantics! \n";
@@ -196,6 +275,29 @@ int main( int argc, char **argv ) {
 
         Value::flag = false;
         std::cout << "\n";
+    }
+
+    {
+        auto c0 = Container("c0", 5, 0);
+        c0.show();
+
+        // Move construct.
+        auto c1( std::move(c0) );
+        c1.show();
+        // Will cause segmentation fault if the name member variable is not properly handled.
+        c0.show();
+
+        auto c2 ( c1 );
+        c2.show();
+
+        auto c3 = c2; // Calls copy constructor.
+        auto c4 = std::move(c2); // Calls move constructor.
+
+        c4 = c3;
+        c4 = std::move(c3);
+
+        auto c5 { c4 };
+        auto c6 { std::move(c4) };
     }
 
     return 0;
