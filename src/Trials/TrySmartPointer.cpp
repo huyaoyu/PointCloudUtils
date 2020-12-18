@@ -23,6 +23,8 @@ public:
         }
 
         this->id = other.id;
+
+        return *this;
     }
 
     ~A() {
@@ -31,6 +33,7 @@ public:
 
     friend std::ostream& operator << ( std::ostream &out, const A& a ) {
         out << "id: " << a.id;
+        return out;
     }
 public:
     int id;

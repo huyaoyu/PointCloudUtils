@@ -134,6 +134,8 @@ namespace CGAL {
             } else {
                 out.write( reinterpret_cast<const char*>( &c ), sizeof(c) );
             }
+
+            return out;
         }
     };
 }

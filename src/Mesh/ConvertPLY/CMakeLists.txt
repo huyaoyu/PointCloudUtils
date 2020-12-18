@@ -8,7 +8,10 @@ find_package(CGAL REQUIRED COMPONENTS Qt5 OPTIONAL_COMPONENTS Core )
 message(STATUS "CGAL_LIBRARIES=${CGAL_LIBRARIES}")
 
 if(CGAL_Qt5_FOUND)
+    message(STATUS "CGAL_Qt5_FOUND")
     add_definitions(-DCGAL_USE_BASIC_VIEWER -DQT_NO_KEYWORDS)
+else()
+    message(STATUS "CGAL_Qt5 not found")
 endif()
 
 #dump_cmake_variables(CGAL)
@@ -36,4 +39,4 @@ target_compile_definitions(${EXE_CONVERT_PLY} PRIVATE TINYPLY_IMPLEMENTATION)
 target_compile_definitions( ${EXE_CONVERT_PLY} PRIVATE CGAL_PMP_USE_CERES_SOLVER )
 
 #target_link_libraries(${EXE_CONVERT_PLY} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../includes)
-target_link_libraries(${EXE_CONVERT_PLY} PUBLIC ${CGAL_LIBRARIES} CGAL::CGAL_Qt5 ceres)
+target_link_libraries(${EXE_CONVERT_PLY} PUBLIC ${CGAL_LIBRARIES} ceres)

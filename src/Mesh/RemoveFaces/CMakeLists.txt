@@ -38,4 +38,4 @@ target_compile_definitions( ${EXE_REMOVE_FACES} PRIVATE CGAL_PMP_USE_CERES_SOLVE
 #target_link_libraries(${EXE_REMOVE_FACES} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../includes)
 target_link_libraries(${EXE_REMOVE_FACES} PUBLIC
         ${LIB_BOOST_SYSTEM} ${LIB_BOOST_FILESYSTEM} ${LIB_BOOST_PROGRAM_OPTIONS}
-        ${CGAL_LIBRARIES} CGAL::CGAL_Qt5 ceres)
+        ${CGAL_LIBRARIES} ceres)

@@ -35,4 +35,4 @@ add_executable(${EXE_ENVELOP_SPHERE} EnvelopSphere.cpp)
 target_compile_definitions(${EXE_ENVELOP_SPHERE} PRIVATE TINYPLY_IMPLEMENTATION)
 target_compile_definitions( ${EXE_ENVELOP_SPHERE} PRIVATE CGAL_PMP_USE_CERES_SOLVER )
 
-target_link_libraries(${EXE_ENVELOP_SPHERE} PUBLIC ${CGAL_LIBRARIES} CGAL::CGAL_Qt5 ceres)
+target_link_libraries(${EXE_ENVELOP_SPHERE} PUBLIC ${CGAL_LIBRARIES} ceres)

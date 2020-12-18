@@ -24,6 +24,8 @@ struct OBB {
         out << "maxPoint: " << obb.maxPoint << std::endl;
         out << "position: " << obb.position << std::endl;
         out << "rotMat: " << obb.rotMat;
+
+        return out;
     }
 
     pT minPoint;

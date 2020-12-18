@@ -102,6 +102,8 @@ public:
         }
 
         out << std::endl << "}";
+
+        return out;
     }
 
 public:
