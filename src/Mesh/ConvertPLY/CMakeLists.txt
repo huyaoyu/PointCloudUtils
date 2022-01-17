@@ -3,7 +3,7 @@ project( ConvertPLY )
 
 set(CMAKE_CXX_STANDARD 14)
 
-set(CGAL_DIR /home/yaoyu/Libraries/cgal)
+set(CGAL_DIR $ENV{CGAL_DIR})
 find_package(CGAL REQUIRED COMPONENTS Qt5 OPTIONAL_COMPONENTS Core )
 message(STATUS "CGAL_LIBRARIES=${CGAL_LIBRARIES}")
 
