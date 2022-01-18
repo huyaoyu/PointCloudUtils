@@ -16,9 +16,6 @@
 
 #include "Visualization/Color.hpp"
 
-// Namespace.
-namespace PMP = CGAL::Polygon_mesh_processing;
-
 typedef CGAL::Exact_predicates_inexact_constructions_kernel Kernel_t;
 typedef Kernel_t::Point_3                                   Point3_t;
 typedef CGAL::Surface_mesh<Point3_t>                        SurfaceMesh_t;

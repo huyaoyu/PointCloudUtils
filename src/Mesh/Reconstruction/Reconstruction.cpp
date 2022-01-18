@@ -18,6 +18,8 @@
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/IO/write_ply_points.h>
 #include <CGAL/Polygon_mesh_processing/remesh.h>
+#include <CGAL/Polygon_mesh_processing/repair.h>
+#include <CGAL/Polygon_mesh_processing/self_intersections.h>
 #include <CGAL/Real_timer.h>
 #include <CGAL/Surface_mesh.h>
 
@@ -209,7 +211,7 @@ static void write_point_cloud(
         throw std::runtime_error( ss.str() );
     }
 
-    if ( !CGAL::write_ply_points(
+    if ( !CGAL::IO::write_PLY(
             ofs, points,
             CGAL::parameters::point_map( CGAL::Identity_property_map<Point3_t>() ) ) ) {
         ofs.close();

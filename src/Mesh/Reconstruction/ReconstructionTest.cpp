@@ -18,6 +18,7 @@
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/IO/read_ply_points.h>
 #include <CGAL/Polygon_mesh_processing/remesh.h>
+#include <CGAL/Polygon_mesh_processing/repair.h>
 #include <CGAL/Surface_mesh.h>
 
 // Namespace.
@@ -137,7 +138,7 @@ void write_mesh_ply(const std::string &fn,
         throw std::runtime_error( ss.str() );
     }
 
-    CGAL::write_ply( ofs, sm );
+    CGAL::IO::write_PLY( ofs, sm );
 
     ofs.close();
 }

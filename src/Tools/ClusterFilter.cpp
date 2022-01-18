@@ -23,7 +23,6 @@
 
 // Namespaces.
 namespace bpo = boost::program_options;
-namespace bpt = boost::posix_time;
 
 class Args
 {

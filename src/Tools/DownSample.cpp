@@ -15,7 +15,6 @@
 
 // Namespaces.
 namespace bpo = boost::program_options;
-namespace bpt = boost::posix_time;
 
 typedef struct Args {
     std::string inFile;

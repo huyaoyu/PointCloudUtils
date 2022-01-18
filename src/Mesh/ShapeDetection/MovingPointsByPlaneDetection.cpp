@@ -22,7 +22,6 @@
 #include "CGALCommon/IO.hpp"
 
 // Namespace.
-namespace PMP = CGAL::Polygon_mesh_processing;
 namespace cc  = cgal_common;
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel Kernel_t;

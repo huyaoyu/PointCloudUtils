@@ -28,9 +28,6 @@
 #include "Filesystem/Filesystem.hpp"
 #include "Profiling/ScopeTimer.hpp"
 
-// Namespace.
-namespace PMP = CGAL::Polygon_mesh_processing;
-
 // CGAL typedefs.
 typedef CGAL::Exact_predicates_inexact_constructions_kernel Kernel_t;
 //typedef CGAL::Simple_cartesian<float>  Kernel_t;

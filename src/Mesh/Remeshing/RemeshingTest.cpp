@@ -35,7 +35,7 @@ void read_mesh_ply(const std::string &fn,
         throw std::runtime_error( ss.str() );
     }
 
-    if ( !CGAL::read_ply( ifs, sm ) ) {
+    if ( !CGAL::IO::read_PLY( ifs, sm ) ) {
         std::stringstream ss;
         ss << "read_ply() from " << fn << " failed. ";
         throw std::runtime_error( ss.str() );

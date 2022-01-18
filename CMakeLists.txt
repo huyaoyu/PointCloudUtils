@@ -23,6 +23,7 @@ message(STATUS "LIB_BOOST_SYSTEM=${LIB_BOOST_SYSTEM}")
 message(STATUS "LIB_BOOST_PROGRAM_OPTIONS=${LIB_BOOST_PROGRAM_OPTIONS}")
 
 # Eigen 3.
+set(Eigen3_DIR $ENV{EIGEN_ROOT}/share/eigen3/cmake)
 FIND_PACKAGE(Eigen3 REQUIRED NO_MODULE)
 
 # Find the PCL library.
@@ -42,6 +43,7 @@ FIND_LIBRARY( LIB_CNPY NAMES cnpy )
 message(STATUS "LIB_CNPY=${LIB_CNPY}")
 
 # Ceres Solver.
+set(Ceres_DIR $ENV{CERES_ROOT}/lib/cmake/Ceres)
 find_package(Ceres REQUIRED)
 include_directories(${CERES_INCLUDE_DIRS})
 

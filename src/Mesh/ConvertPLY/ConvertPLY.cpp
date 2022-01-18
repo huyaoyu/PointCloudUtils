@@ -26,6 +26,7 @@
 #include <CGAL/draw_surface_mesh.h>
 
 #include <CGAL/boost/graph/iterator.h>
+#include <CGAL/Polygon_mesh_processing/repair.h>
 #include <CGAL/Polygon_mesh_processing/repair_polygon_soup.h>
 #include <CGAL/Polygon_mesh_processing/orient_polygon_soup.h>
 #include <CGAL/Polygon_mesh_processing/polygon_soup_to_polygon_mesh.h>
